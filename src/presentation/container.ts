@@ -8,7 +8,7 @@ import { createUpdateEntryScore } from "@/application/use-cases/update-entry-sco
 import { db } from "@/infrastructure/db/client";
 import { createDrizzleTxRunner, reposFor } from "@/infrastructure/repositories/drizzle-tx-runner";
 
-const txRunner = createDrizzleTxRunner(db);
+const txRunner = createDrizzleTxRunner();
 const readRepos = reposFor(db);
 
 export const useCases = {

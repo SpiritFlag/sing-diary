@@ -1,5 +1,5 @@
 // Design Ref: §3.3 — ARCHITECT.md §4 스키마 전사
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -110,3 +110,22 @@ export const entries = pgTable(
   },
   (table) => [index("idx_entries_session").on(table.sessionId, table.position)],
 );
+
+// Design Ref: §9.4 — 리포지토리의 db.query.*.findFirst({ with }) 조인에 필요
+export const songsRelations = relations(songs, ({ many }) => ({
+  numbers: many(songNumbers),
+  entries: many(entries),
+}));
+
+export const songNumbersRelations = relations(songNumbers, ({ one }) => ({
+  song: one(songs, { fields: [songNumbers.songId], references: [songs.id] }),
+}));
+
+export const sessionsRelations = relations(sessions, ({ many }) => ({
+  entries: many(entries),
+}));
+
+export const entriesRelations = relations(entries, ({ one }) => ({
+  session: one(sessions, { fields: [entries.sessionId], references: [sessions.id] }),
+  song: one(songs, { fields: [entries.songId], references: [songs.id] }),
+}));

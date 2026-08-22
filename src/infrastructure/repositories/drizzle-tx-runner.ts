@@ -1,6 +1,6 @@
-// Design Ref: §3.4 — R1 해소. TransactionRunner의 Drizzle 구현 (neon-serverless Pool)
+// Design Ref: §3.4 — R1 해소. TransactionRunner의 Drizzle 구현 (요청마다 새 Pool)
 import type { TransactionRunner, TxRepos } from "@/application/ports/transaction";
-import type { Database } from "../db/client";
+import { runInTransaction } from "../db/transaction-client";
 import { createDrizzleEntryRepo } from "./drizzle-entry-repo";
 import { createDrizzleSessionRepo } from "./drizzle-session-repo";
 import { createDrizzleSongRepo } from "./drizzle-song-repo";
@@ -14,10 +14,10 @@ function reposFor(db: DbOrTx): TxRepos {
   };
 }
 
-export function createDrizzleTxRunner(db: Database): TransactionRunner {
+export function createDrizzleTxRunner(): TransactionRunner {
   return {
     run(fn) {
-      return db.transaction((tx) => fn(reposFor(tx)));
+      return runInTransaction((tx) => fn(reposFor(tx)));
     },
   };
 }

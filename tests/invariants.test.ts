@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { entries, sessions, songNumbers } from "../src/infrastructure/db/schema";
 import { resetAndSeed, SEED_USERS, type SeedResult } from "../src/infrastructure/db/seed";
 import type { Database } from "../src/infrastructure/db/client";
+import type { runInTransaction as RunInTransaction } from "../src/infrastructure/db/transaction-client";
 
 const hasDb = Boolean(process.env.DATABASE_URL);
 
@@ -12,10 +13,12 @@ const hasDb = Boolean(process.env.DATABASE_URL);
 // 이 스위트 자체가 로드 실패하지 않도록 실제 client 모듈만 동적 import로 지연시킨다.
 describe.skipIf(!hasDb)("DB 불변식 (Design §8.2)", () => {
   let db: Database;
+  let runInTransaction: typeof RunInTransaction;
   let seed: SeedResult;
 
   beforeAll(async () => {
     const { db: realDb } = await import("../src/infrastructure/db/client");
+    ({ runInTransaction } = await import("../src/infrastructure/db/transaction-client"));
     db = realDb;
     seed = await resetAndSeed(db);
   });
@@ -50,7 +53,7 @@ describe.skipIf(!hasDb)("DB 불변식 (Design §8.2)", () => {
     });
     expect(before).toBeDefined();
 
-    const created = await db.transaction(async (tx) => {
+    const created = await runInTransaction(async (tx) => {
       await tx
         .update(sessions)
         .set({ closedAt: new Date() })
@@ -85,7 +88,7 @@ describe.skipIf(!hasDb)("DB 불변식 (Design §8.2)", () => {
     const sessionId = seeded.sessions.open;
     const newOrder = [...seeded.entries].reverse();
 
-    await db.transaction(async (tx) => {
+    await runInTransaction(async (tx) => {
       // 1단계: 충돌 회피 시프트
       await tx
         .update(entries)

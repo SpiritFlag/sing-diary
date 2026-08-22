@@ -2,15 +2,19 @@
 import { DomainError } from "@/domain";
 import { beforeAll, describe, expect, it } from "vitest";
 import { resetAndSeed, SEED_USERS } from "../src/infrastructure/db/seed";
+import { activateTestDatabase } from "./support/db";
 
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = Boolean(process.env.TEST_DATABASE_URL);
 
+// activateTestDatabase()가 동적 import 직전에 DATABASE_URL을 TEST_DATABASE_URL로
+// 바꿔치기하므로 이 스위트는 상용 DB를 절대 건드리지 않는다.
 describe.skipIf(!hasDb)("유스케이스 (Design §8.3)", () => {
   let db: (typeof import("../src/infrastructure/db/client"))["db"];
   let useCases: typeof import("../src/presentation/container").useCases;
   let seed: Awaited<ReturnType<typeof resetAndSeed>>;
 
   beforeAll(async () => {
+    activateTestDatabase();
     ({ db } = await import("../src/infrastructure/db/client"));
     ({ useCases } = await import("../src/presentation/container"));
     seed = await resetAndSeed(db);

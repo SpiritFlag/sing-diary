@@ -2,15 +2,19 @@
 import { DomainError } from "@/domain";
 import { beforeAll, describe, expect, it } from "vitest";
 import { resetAndSeed, SEED_USERS } from "../src/infrastructure/db/seed";
+import { activateTestDatabase } from "./support/db";
 
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = Boolean(process.env.TEST_DATABASE_URL);
 
+// activateTestDatabase()가 동적 import 직전에 DATABASE_URL을 TEST_DATABASE_URL로
+// 바꿔치기하므로 이 스위트는 상용 DB를 절대 건드리지 않는다.
 describe.skipIf(!hasDb)("유스케이스 (Design §8.3)", () => {
   let db: (typeof import("../src/infrastructure/db/client"))["db"];
   let useCases: typeof import("../src/presentation/container").useCases;
   let seed: Awaited<ReturnType<typeof resetAndSeed>>;
 
   beforeAll(async () => {
+    activateTestDatabase();
     ({ db } = await import("../src/infrastructure/db/client"));
     ({ useCases } = await import("../src/presentation/container"));
     seed = await resetAndSeed(db);
@@ -24,6 +28,8 @@ describe.skipIf(!hasDb)("유스케이스 (Design §8.3)", () => {
     });
     expect(result.isNewStub).toBe(true);
     expect(result.entry.position).toBe(4); // seed에 이미 3건
+    // API 응답이 song 정보를 함께 반환해야 클라이언트가 즉시 렌더링 가능 (Design §4.2 계약)
+    expect(result.song).toEqual({ id: result.entry.songId, title: null, number: "99999" });
 
     const current = await useCases.getCurrentSession(SEED_USERS.a);
     const added = current?.entries.find((e) => e.id === result.entry.id);
@@ -42,6 +48,7 @@ describe.skipIf(!hasDb)("유스케이스 (Design §8.3)", () => {
     });
     expect(result.isNewStub).toBe(false);
     expect(result.entry.songId).toBe(seed.songs.normal);
+    expect(result.song).toEqual({ id: seed.songs.normal, title: "기존 곡", number: "11111" });
 
     const after = await useCases.getCurrentSession(SEED_USERS.a);
     expect(after!.entries.length).toBe(beforeCount + 1);

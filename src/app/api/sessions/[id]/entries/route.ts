@@ -15,7 +15,7 @@ export async function POST(
     const { number } = addEntryByNumberSchema.parse(await req.json());
     const result = await useCases.addEntryByNumber({ ownerId, sessionId, number });
     return NextResponse.json(
-      { data: { ...result.entry, isNewStub: result.isNewStub } },
+      { data: { ...result.entry, song: result.song, isNewStub: result.isNewStub } },
       { status: 201 },
     );
   } catch (error) {

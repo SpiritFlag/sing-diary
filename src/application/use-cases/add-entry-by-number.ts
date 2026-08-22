@@ -10,6 +10,7 @@ export interface AddEntryByNumberInput {
 
 export interface AddEntryByNumberResult {
   entry: Entry;
+  song: { id: string; title: string | null; number: string };
   isNewStub: boolean;
 }
 
@@ -45,7 +46,11 @@ export function createAddEntryByNumber(tx: TransactionRunner) {
       }
 
       const entry = await repos.entries.appendToSession(session.id, song.id);
-      return { entry, isNewStub };
+      return {
+        entry,
+        song: { id: song.id, title: song.title, number: input.number },
+        isNewStub,
+      };
     });
   };
 }

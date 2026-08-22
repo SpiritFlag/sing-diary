@@ -6,17 +6,21 @@ import { entries, sessions, songNumbers } from "../src/infrastructure/db/schema"
 import { resetAndSeed, SEED_USERS, type SeedResult } from "../src/infrastructure/db/seed";
 import type { Database } from "../src/infrastructure/db/client";
 import type { runInTransaction as RunInTransaction } from "../src/infrastructure/db/transaction-client";
+import { activateTestDatabase } from "./support/db";
 
-const hasDb = Boolean(process.env.DATABASE_URL);
+const hasDb = Boolean(process.env.TEST_DATABASE_URL);
 
 // client.ts는 import 시점에 DATABASE_URL을 요구하므로, 없는 환경(단위테스트만 도는 CI 등)에서
 // 이 스위트 자체가 로드 실패하지 않도록 실제 client 모듈만 동적 import로 지연시킨다.
+// activateTestDatabase()가 import 직전에 DATABASE_URL을 TEST_DATABASE_URL로 바꿔치기하므로
+// 이 스위트는 상용 DB를 절대 건드리지 않는다.
 describe.skipIf(!hasDb)("DB 불변식 (Design §8.2)", () => {
   let db: Database;
   let runInTransaction: typeof RunInTransaction;
   let seed: SeedResult;
 
   beforeAll(async () => {
+    activateTestDatabase();
     const { db: realDb } = await import("../src/infrastructure/db/client");
     ({ runInTransaction } = await import("../src/infrastructure/db/transaction-client"));
     db = realDb;

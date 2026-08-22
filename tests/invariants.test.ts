@@ -29,7 +29,7 @@ describe.skipIf(!hasDb)("DB 불변식 (Design §8.2)", () => {
         brand: "TJ",
         closedAt: null,
       }),
-    ).rejects.toMatchObject({ code: "23505" });
+    ).rejects.toMatchObject({ cause: { code: "23505" } });
   });
 
   it("INV-2: AVAILABLE인데 number NULL이면 CHECK 위반", async () => {
@@ -41,7 +41,7 @@ describe.skipIf(!hasDb)("DB 불변식 (Design §8.2)", () => {
         number: null,
         status: "AVAILABLE",
       }),
-    ).rejects.toMatchObject({ code: "23514" });
+    ).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 
   it("INV-3: 세션 전환(종료+생성)이 하나의 트랜잭션으로 원자 처리된다", async () => {

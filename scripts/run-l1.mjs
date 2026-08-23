@@ -10,6 +10,9 @@ import { Client } from "pg";
 const TARGET_URL = process.env.L1_TARGET_URL ?? "https://sing-diary.spiritflag.work";
 const TEST_EMAIL = "sing-diary-l1-test@example.com";
 
+// Design Ref: refine-auth-boundary §8.2 D-H — 콜드/워밍 회차를 로그에서 구분하기 위한 라벨(선택).
+const RUN_LABEL = process.env.L1_RUN_LABEL;
+
 // Vercel Deployment Protection이 걸린 Preview(develop)를 찌를 때만 필요.
 // Project Settings → Deployment Protection → Protection Bypass for Automation.
 const VERCEL_BYPASS = process.env.L1_VERCEL_BYPASS;
@@ -19,18 +22,25 @@ function log(...args) {
   console.log(...args);
 }
 
-function req(path, opts = {}) {
-  return fetch(`${TARGET_URL}${path}`, {
+// Design Ref: refine-auth-boundary §8.2 D-H — 응답 헤더 수신까지의 클라이언트 측 왕복시간(ms)을
+// 재서 Response에 스탬프한다. 콜드스타트·네트워크를 포함한 사용자 체감에 가장 가깝다.
+async function req(path, opts = {}) {
+  const start = performance.now();
+  const res = await fetch(`${TARGET_URL}${path}`, {
     ...opts,
     headers: { ...opts.headers, ...bypassHeader },
   });
+  res.elapsedMs = Math.round(performance.now() - start);
+  return res;
 }
 
 const results = [];
 
 function record(id, description, expected, res, body, pass) {
-  results.push({ id, description, expected, status: res.status, body, pass });
-  log(`${pass ? "✅" : "❌"} #${id} ${description} — expected ${expected}, got ${res.status}`);
+  results.push({ id, description, expected, status: res.status, body, pass, elapsedMs: res.elapsedMs });
+  log(
+    `${pass ? "✅" : "❌"} #${id} ${description} — expected ${expected}, got ${res.status} (${res.elapsedMs}ms)`,
+  );
 }
 
 async function main() {
@@ -41,7 +51,7 @@ async function main() {
 
   const clerk = createClerkClient({ secretKey });
 
-  log(`대상: ${TARGET_URL}`);
+  log(`대상: ${TARGET_URL}${RUN_LABEL ? ` [${RUN_LABEL}]` : ""}`);
   log("테스트 유저 준비 중...");
 
   const existing = await clerk.users.getUserList({ emailAddress: [TEST_EMAIL] });
@@ -177,6 +187,27 @@ async function main() {
       const body = await res.json().catch(() => null);
       record(8, "DELETE entry 정상", 200, res, body, res.status === 200);
     }
+
+    // 9. GET / — 미인증 페이지 접근 — sign-in으로 리다이렉트
+    // Design Ref: refine-auth-boundary §8.2 — Node fetch는 Accept:*/* 라 Clerk handshake
+    // 대상이 아니다. redirect:"manual"로 3xx + Location을 직접 판정한다(opaqueredirect 아님).
+    {
+      const res = await req("/", { redirect: "manual" });
+      const location = res.headers.get("location") ?? "";
+      const pass = [302, 303, 307, 308].includes(res.status) && location.includes("/sign-in");
+      results.push({
+        id: 9,
+        description: "GET / (미인증 페이지)",
+        expected: "3xx → /sign-in",
+        status: res.status,
+        body: { location },
+        pass,
+        elapsedMs: res.elapsedMs,
+      });
+      log(
+        `${pass ? "✅" : "❌"} #9 GET / (미인증 페이지) — expected 3xx → /sign-in, got ${res.status} → ${location} (${res.elapsedMs}ms)`,
+      );
+    }
   } finally {
     log("정리 중 — 테스트 유저 소유 데이터만 정확히 scope해서 삭제...");
     const pg = new Client({ connectionString: databaseUrl });
@@ -207,6 +238,13 @@ async function main() {
       log(`  #${r.id} ${r.description}:`, JSON.stringify(r.body));
     }
     process.exitCode = 1;
+  }
+
+  // Design Ref: refine-auth-boundary §8.2 D-H — ms는 판정에 쓰지 않는다. NFR 기준은
+  // Analysis에서 콜드/워밍 실측 근거로 확정한다(Plan §3.2). 이 표는 그 원자재일 뿐이다.
+  log(`\n# desc status ms`);
+  for (const r of results) {
+    log(`${r.id}  ${r.description}  ${r.status}  ${r.elapsedMs}ms`);
   }
 }
 

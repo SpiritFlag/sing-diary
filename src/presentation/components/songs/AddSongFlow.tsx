@@ -14,7 +14,7 @@ import { useToast } from "@/presentation/components/ui/toast";
 import { addDecision } from "./song-state";
 
 interface ApiError {
-  error?: { message?: string };
+  error?: { code?: string; message?: string };
 }
 
 export async function parseErrorMessage(res: Response, fallback: string): Promise<string> {
@@ -64,8 +64,16 @@ export function AddSongFlow({
         ),
       });
       if (!res.ok) {
-        // 시트는 닫지 않는다 — 사용자가 입력한 번호를 잃지 않고 다시 시도할 수 있어야 한다
-        toast.show(await parseErrorMessage(res, "곡 추가에 실패했어요"));
+        const body: ApiError | null = await res.json().catch(() => null);
+        toast.show(body?.error?.message ?? "곡 추가에 실패했어요");
+        // Design Ref: §6 — SESSION_CLOSED(409)는 다른 기기에서 새 세션을 열어 이 세션이 닫힌
+        // 경우다. 이때만은 시트를 유지하지 않는다. 대상이 사라졌으니 같은 번호로 다시 눌러도
+        // 같은 409뿐이고, 낡은 화면을 그대로 두면 조용히 죽는다 — refresh로 오늘 세션을 다시 읽는다.
+        if (body?.error?.code === "SESSION_CLOSED") {
+          setSheetOpen(false);
+          router.refresh();
+        }
+        // 그 밖의 실패는 시트를 닫지 않는다 — 입력한 번호를 잃지 않고 다시 시도할 수 있어야 한다
         return;
       }
       toast.show("오늘의 플리에 추가했어요", "mint");

@@ -1,8 +1,7 @@
 // Design Ref: §4.2 GET /api/sessions/current
 import { NextResponse } from "next/server";
-import { requireOwnerId } from "@/presentation/api/auth";
 import { mapError } from "@/presentation/api/error-mapper";
-import { useCases } from "@/presentation/container";
+import { requireOwnerId, useCases } from "@/presentation/container";
 
 export async function GET() {
   try {

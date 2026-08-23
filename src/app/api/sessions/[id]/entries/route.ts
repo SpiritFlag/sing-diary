@@ -1,9 +1,8 @@
 // Design Ref: §4.2 POST /api/sessions/:id/entries
 import { NextRequest, NextResponse } from "next/server";
-import { requireOwnerId } from "@/presentation/api/auth";
 import { mapError } from "@/presentation/api/error-mapper";
 import { addEntryByNumberSchema } from "@/presentation/api/schemas";
-import { useCases } from "@/presentation/container";
+import { requireOwnerId, useCases } from "@/presentation/container";
 
 export async function POST(
   req: NextRequest,

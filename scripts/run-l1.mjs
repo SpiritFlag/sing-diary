@@ -96,6 +96,9 @@ async function main() {
   const OTHER_OWNER_ID = "l1-test-other-owner";
   const OTHER_SONG_TITLE = "L1엘원다른소유자곡";
   let otherSongId;
+  // expand-playlist-import module-6 추가 — #21/#22(세션 owner 격리)용 타 owner 세션 1건.
+  // 곡과 마찬가지로 id를 보관해 finally에서 그 id만 지운다.
+  let otherSessionId;
   {
     const setupPg = new Client({ connectionString: databaseUrl });
     await setupPg.connect();
@@ -106,6 +109,14 @@ async function main() {
       );
       otherSongId = rows[0].id;
       log(`타 owner 시드 곡 생성: ${otherSongId}`);
+
+      const { rows: sessionRows } = await setupPg.query(
+        `INSERT INTO sessions (owner_id, visit_date, venue, brand, closed_at)
+         VALUES ($1, '2026-08-01', 'L1타인노래방', 'TJ', now()) RETURNING id`,
+        [OTHER_OWNER_ID],
+      );
+      otherSessionId = sessionRows[0].id;
+      log(`타 owner 시드 세션 생성: ${otherSessionId}`);
     } finally {
       await setupPg.end();
     }
@@ -341,6 +352,157 @@ async function main() {
       const pass = res.status === 200 && row?.title === null;
       record(19, "PATCH title 빈문자열 → NULL", 200, res, body, pass);
     }
+
+    // ─── expand-playlist-import module-6: #20~#28 ────────────────────────────
+    // 이 시점의 상태: 내 세션은 열려 있고 엔트리 0건(#5에서 추가, #8에서 삭제),
+    // songId 곡은 제목 NULL(#19) + TJ 번호 행 없음(#18) — 즉 "행 없음" 분기의 산 표본이다.
+
+    // 20. GET /api/sessions — 미인증 — 401
+    {
+      const res = await req("/api/sessions");
+      const body = await res.json().catch(() => null);
+      const pass = res.status === 401 && body?.error?.code === "UNAUTHORIZED";
+      record(20, "GET /sessions (미인증)", 401, res, body, pass);
+    }
+
+    // 21. GET /api/sessions — 인증 — 내 세션 포함 · 타 owner 세션 미포함 · entryCount 정확
+    //     "정확"의 정의: 같은 세션을 상세로 조회한 entries 길이와 일치한다(D-O 집계 검증).
+    {
+      const res = await req("/api/sessions", { headers: authHeader });
+      const body = await res.json().catch(() => null);
+      const mine = body?.data?.find((s) => s.id === sessionId);
+      const leaked = body?.data?.some((s) => s.id === otherSessionId);
+
+      const detailRes = await req(`/api/sessions/${sessionId}`, { headers: authHeader });
+      const detailBody = await detailRes.json().catch(() => null);
+
+      const pass =
+        res.status === 200 &&
+        Boolean(mine) &&
+        mine?.isOpen === true &&
+        !leaked &&
+        mine?.entryCount === detailBody?.data?.entries?.length;
+      record(21, "GET /sessions 인증 (타owner 미포함·집계 일치)", 200, res, body, pass);
+    }
+
+    // 22. GET /api/sessions/:타owner세션 — 404 SESSION_NOT_FOUND (D-Q 실측 — 403이 아니다)
+    {
+      const res = await req(`/api/sessions/${otherSessionId}`, { headers: authHeader });
+      const body = await res.json().catch(() => null);
+      const pass = res.status === 404 && body?.error?.code === "SESSION_NOT_FOUND";
+      record(22, "GET /sessions/:타owner", 404, res, body, pass);
+    }
+
+    // 23. GET /api/sessions/:내세션 — 200 + 곡마다 양쪽 브랜드 키 존재 (D-N의 전제)
+    {
+      const res = await req(`/api/sessions/${sessionId}`, { headers: authHeader });
+      const body = await res.json().catch(() => null);
+      const entries = body?.data?.entries;
+      const everySongHasBothBrands =
+        Array.isArray(entries) &&
+        entries.every((e) => "TJ" in (e.song?.numbers ?? {}) && "KY" in (e.song?.numbers ?? {}));
+      const pass =
+        res.status === 200 &&
+        body?.data?.id === sessionId &&
+        Array.isArray(entries) &&
+        everySongHasBothBrands;
+      record(23, "GET /sessions/:내세션 상세", 200, res, body, pass);
+    }
+
+    // 24. POST entries { songId: 타 owner 곡 } — 404 SONG_NOT_FOUND
+    //     이번 사이클에서 새로 열린 IDOR 표면이다(D-P). FK는 owner를 모른다.
+    {
+      const res = await req(`/api/sessions/${sessionId}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ songId: otherSongId }),
+      });
+      const body = await res.json().catch(() => null);
+      const pass = res.status === 404 && body?.error?.code === "SONG_NOT_FOUND";
+      record(24, "POST entries {타owner songId}", 404, res, body, pass);
+    }
+
+    // 25. POST entries { songId, registerNumber } — 행 없음 곡에 번호 등록 + 추가를 한 번에.
+    //     재조회로 TJ 행이 **하나 생기고** AVAILABLE인지 확인한다(3-state 계약 — R3 핵심).
+    let registerElapsedMs;
+    {
+      const res = await req(`/api/sessions/${sessionId}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ songId, registerNumber: "31337" }),
+      });
+      registerElapsedMs = res.elapsedMs;
+      const body = await res.json().catch(() => null);
+      const listRes = await req("/api/songs", { headers: authHeader });
+      const listBody = await listRes.json().catch(() => null);
+      const row = listBody?.data?.find((s) => s.id === songId);
+      const pass =
+        res.status === 201 &&
+        row?.numbers?.TJ?.status === "AVAILABLE" &&
+        row?.numbers?.TJ?.number === "31337";
+      record(25, "POST entries {songId, registerNumber} → 행 생성", 201, res, body, pass);
+    }
+
+    // 26. POST entries { songId } — UNSUPPORTED 곡 건너뛰고 추가.
+    //     번호 상태를 일절 건드리지 않는지 재조회로 확인한다(D-S — M3 큐 계약).
+    //     겸사겸사 목록 집계가 실제 추가분만큼 늘었는지도 본다(#21의 0건 비교를 보강).
+    {
+      const setup = await req(`/api/songs/${songId}/numbers/TJ`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ status: "UNSUPPORTED" }),
+      });
+      if (setup.status !== 200) log("  ⚠️ #26 준비(UNSUPPORTED 전환) 실패");
+
+      const res = await req(`/api/sessions/${sessionId}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ songId }),
+      });
+      const body = await res.json().catch(() => null);
+
+      const listRes = await req("/api/songs", { headers: authHeader });
+      const listBody = await listRes.json().catch(() => null);
+      const row = listBody?.data?.find((s) => s.id === songId);
+
+      const sessionsRes = await req("/api/sessions", { headers: authHeader });
+      const sessionsBody = await sessionsRes.json().catch(() => null);
+      const mine = sessionsBody?.data?.find((s) => s.id === sessionId);
+
+      const pass =
+        res.status === 201 &&
+        row?.numbers?.TJ?.status === "UNSUPPORTED" &&
+        row?.numbers?.TJ?.number === null &&
+        mine?.entryCount === 2; // #25와 #26이 각각 1건씩 — 집계가 실제와 맞는다
+      record(26, "POST entries {songId} 건너뛰기 → 번호 상태 불변", 201, res, body, pass);
+    }
+
+    // 27. POST entries { songId, number } 혼합 본문 — 400 VALIDATION_ERROR
+    //     유니언 갈래에 .strict()가 없으면 조용히 한쪽으로 흡수된다(C-8).
+    {
+      const res = await req(`/api/sessions/${sessionId}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ songId, number: "1" }),
+      });
+      const body = await res.json().catch(() => null);
+      const pass = res.status === 400 && body?.error?.code === "VALIDATION_ERROR";
+      record(27, "POST entries {songId, number} 혼합", 400, res, body, pass);
+    }
+
+    // 28. #25의 왕복시간 — 5초 이내 (NFR). 등록+추가를 단일 트랜잭션 1왕복으로 담은 D-K의 증명이다.
+    //     2요청으로 나눴다면 여기가 8초대가 된다. 다른 케이스와 달리 이 하나만 ms를 판정에 쓴다.
+    {
+      const pass = registerElapsedMs <= 5000;
+      record(
+        28,
+        `#25 왕복시간 ${registerElapsedMs}ms`,
+        "<=5000ms",
+        { status: 200, elapsedMs: registerElapsedMs },
+        { registerElapsedMs },
+        pass,
+      );
+    }
   } finally {
     log("정리 중 — 테스트 유저 소유 데이터만 정확히 scope해서 삭제...");
     const pg = new Client({ connectionString: databaseUrl });
@@ -359,6 +521,11 @@ async function main() {
       // module-6 추가 — 타 owner 시드 1건만 id로 정확히 지운다(owner_id 범위 삭제 아님, §8.3)
       if (otherSongId) {
         await pg.query(`DELETE FROM songs WHERE id = $1`, [otherSongId]);
+      }
+      // expand-playlist-import module-6 추가 — 타 owner 시드 세션 1건만 id로 정확히 지운다.
+      if (otherSessionId) {
+        await pg.query(`DELETE FROM entries WHERE session_id = $1`, [otherSessionId]);
+        await pg.query(`DELETE FROM sessions WHERE id = $1`, [otherSessionId]);
       }
     } finally {
       await pg.end();

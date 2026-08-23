@@ -1,14 +1,12 @@
 "use client";
 
 // Design Ref: §5.4, §9.1 — 번호 3-state 편집. "비움"과 "미지원"은 서로 다른 조작이다(M3 큐 계약).
-// dirty-check(모듈-5 결정, Check 단계 G-1 수정): UNSUPPORTED·행없음 상태는 입력칸이 똑같이
-// "" 비어 보이므로 문자열 비교(draft === initial)로는 두 상태를 구분할 수 없다 — 처음 구현은
-// 이 때문에 UNSUPPORTED에서 "지우고 확정"이 영원히 발동 못 하는 사각지대가 있었다(값이 이미
-// ""이라 "변경 없음"으로 오판). 그래서 "값이 무엇인가"가 아니라 "사용자가 실제로 타이핑했는가"
-// (touched)로 판정을 바꿨다 — 아무것도 안 건드리고 나가면 상태 그대로, 건드린 뒤 비워서
-// 나가면(중간에 다시 지워도 포함) 진짜 "지우고 확정"으로 취급한다.
+// Design Ref: expand-playlist-import §3.5, §10.1 C-6 — 확정 판정(dirty-check 포함)은 이 컴포넌트가
+// 아니라 song-state.ts의 commitDecision()이 한다. G-1 수정의 근거는 그 함수 주석에 있다.
+// 여기 남은 것은 편집 상태(editing/draft/touched)와 그 판정 결과를 콜백으로 흘리는 일뿐이다.
 import { useState } from "react";
 import type { NumberView } from "@/application/ports/song-query";
+import { commitDecision } from "./song-state";
 
 export function NumberCell({
   value,
@@ -53,13 +51,13 @@ export function NumberCell({
 
   function commit() {
     setEditing(false);
-    if (!touched) return; // 실제로 안 건드림 — 문자열이 뭐든 조용히 편집만 닫는다 (dirty-check)
-    const trimmed = draft.trim();
-    if (trimmed === "") {
+    const decision = commitDecision(draft, touched);
+    if (decision.kind === "noop") return;
+    if (decision.kind === "clear") {
       onClear();
       return;
     }
-    onCommitAvailable(trimmed);
+    onCommitAvailable(decision.number);
   }
 
   return (

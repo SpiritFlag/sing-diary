@@ -11,6 +11,21 @@ export const addEntryByNumberSchema = z.object({
   number: z.string().min(1).max(10),
 });
 
+// Design Ref: expand-playlist-import §4.2, §2.3 D-J·D-K, §10.1 C-8 — POST /api/sessions/:id/entries의
+// 본문 유니언. "무엇으로 곡을 지목하는가"만 다르므로 라우트를 새로 만들지 않고 형태로 가른다.
+// 기존 { number } 갈래는 addEntryByNumberSchema를 그대로 재사용해 바이트 단위로 보존된다 —
+// 현장 번호 입력(AddByNumber)과 기존 L1 케이스는 요청이 한 글자도 바뀌지 않는다(Plan R1).
+// .strict()가 없으면 { songId, number } 혼합 본문이 조용히 한쪽 갈래로 흡수된다(setSongNumberSchema 선례).
+export const addEntrySchema = z.union([
+  addEntryByNumberSchema.strict(),
+  z
+    .object({
+      songId: z.string().uuid(),
+      registerNumber: z.string().trim().min(1).max(10).optional(),
+    })
+    .strict(),
+]);
+
 export const reorderEntriesSchema = z.object({
   entryIds: z.array(z.string().uuid()).min(1),
 });
@@ -29,7 +44,6 @@ const nullableText = (max: number) =>
 
 export const searchSongsQuerySchema = z.object({
   q: z.string().trim().min(1, "검색어를 입력하세요").max(100),
-  brand: z.enum(["TJ", "KY"]).optional(),
 });
 
 export const updateSongMetaSchema = z

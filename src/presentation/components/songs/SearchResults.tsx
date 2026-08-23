@@ -1,38 +1,17 @@
 "use client";
 
-// Design Ref: §4.1, §5.2, §5.5 — 통합검색 결과 + AVAILABLE 분기 한정 추가(D-A).
-// 추가는 신규 API를 만들지 않고 기존 POST /api/sessions/:id/entries를 재사용한다(module-4 결정,
-// Design §6.2가 열어두고 확정하지 않았던 지점) — AVAILABLE 곡의 번호를 그대로 넘기면
-// findByOwnerBrandNumber가 같은 곡을 찾아 stub 생성 없이 정확히 그 곡을 추가한다.
+// Design Ref: §4.1, §5.2, §5.5 + expand-playlist-import §5.4, §2.3 D-R — 통합검색 결과.
+//
+// 직전 사이클까지 이 파일은 "AVAILABLE 곡의 번호를 도로 POST해 findByOwnerBrandNumber가 같은
+// 곡을 찾게 하는" 우회로 추가를 구현했고, 그래서 UNSUPPORTED·행없음 곡의 버튼은 잠겨 있었다
+// (넘길 번호가 없으니 구조적으로 불가능했다). songId 기반 경로가 생긴 지금 그 우회는 사라졌고,
+// 추가 UI는 지난 플리 상세와 공유하는 AddSongFlow가 통째로 진다 — 판정도 요청도 여기 없다.
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import type { Brand } from "@/domain";
 import type { SongListItem } from "@/application/ports/song-query";
 import { useToast } from "@/presentation/components/ui/toast";
+import { AddSongFlow, parseErrorMessage } from "./AddSongFlow";
 import { SearchBox } from "./SearchBox";
-
-interface ApiError {
-  error?: { message?: string };
-}
-
-async function parseErrorMessage(res: Response, fallback: string): Promise<string> {
-  const body: ApiError | null = await res.json().catch(() => null);
-  return body?.error?.message ?? fallback;
-}
-
-type NumberState =
-  | { addable: true; number: string; label: string }
-  | { addable: false; number: null; label: string };
-
-function numberState(item: SongListItem, brand: Brand): NumberState {
-  const n = item.numbers[brand];
-  if (!n) return { addable: false, number: null, label: "번호가 아직 없어요" };
-  if (n.status === "UNSUPPORTED") {
-    return { addable: false, number: null, label: "이 기기에선 미지원" };
-  }
-  // status === "AVAILABLE" — 3-state 계약상 number가 항상 존재한다 (§4.2 CHECK 제약)
-  return { addable: true, number: n.number as string, label: n.number as string };
-}
 
 export function SearchResults({
   sessionId,
@@ -41,18 +20,16 @@ export function SearchResults({
   sessionId: string | null;
   brand: Brand | null;
 }) {
-  const router = useRouter();
   const toast = useToast();
   const [results, setResults] = useState<SongListItem[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [addingId, setAddingId] = useState<string | null>(null);
 
   async function handleSearch(keyword: string) {
     setLoading(true);
     try {
+      // FR-17 — brand는 보내지 않는다. 통합검색은 브랜드와 무관하고 서버도 더 이상 읽지 않는다.
       const url = new URL("/api/songs/search", window.location.origin);
       url.searchParams.set("q", keyword);
-      if (brand) url.searchParams.set("brand", brand);
       const res = await fetch(url.toString());
       if (!res.ok) {
         toast.show(await parseErrorMessage(res, "검색에 실패했어요"));
@@ -63,29 +40,6 @@ export function SearchResults({
       setResults(data);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleAdd(item: SongListItem) {
-    if (!sessionId || !brand) return;
-    const state = numberState(item, brand);
-    if (!state.addable) return;
-
-    setAddingId(item.id);
-    try {
-      const res = await fetch(`/api/sessions/${sessionId}/entries`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ number: state.number }),
-      });
-      if (!res.ok) {
-        toast.show(await parseErrorMessage(res, "곡 추가에 실패했어요"));
-        return;
-      }
-      toast.show("오늘의 플리에 추가했어요", "mint");
-      router.refresh();
-    } finally {
-      setAddingId(null);
     }
   }
 
@@ -109,34 +63,21 @@ export function SearchResults({
 
       {results !== null && results.length > 0 && (
         <ul className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
-          {results.map((item) => {
-            const state = sessionId && brand ? numberState(item, brand) : null;
-            return (
-              <li
-                key={item.id}
-                className="flex items-center gap-3 rounded-lg bg-surface px-3 py-2"
-              >
-                <div className="flex flex-1 flex-col">
-                  <span className="text-sm text-text">{item.title ?? "제목 없음"}</span>
-                  <span className="text-xs text-text-dim">{item.artist ?? "—"}</span>
-                </div>
-                {state && (
-                  <>
-                    <span className="text-xs text-text-dim">{state.label}</span>
-                    <button
-                      type="button"
-                      disabled={!state.addable || addingId === item.id}
-                      onClick={() => handleAdd(item)}
-                      aria-label={state.addable ? "오늘의 플리에 추가" : state.label}
-                      className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-bg disabled:opacity-40"
-                    >
-                      추가
-                    </button>
-                  </>
-                )}
-              </li>
-            );
-          })}
+          {results.map((item) => (
+            <li
+              key={item.id}
+              className="flex items-center gap-3 rounded-lg bg-surface px-3 py-2"
+            >
+              <div className="flex flex-1 flex-col">
+                <span className="text-sm text-text">{item.title ?? "제목 없음"}</span>
+                <span className="text-xs text-text-dim">{item.artist ?? "—"}</span>
+              </div>
+              {/* 열린 세션이 없으면 추가 열 자체를 렌더하지 않는다 (기존 동작 유지) */}
+              {sessionId && brand && (
+                <AddSongFlow song={item} sessionId={sessionId} todayBrand={brand} />
+              )}
+            </li>
+          ))}
         </ul>
       )}
     </div>

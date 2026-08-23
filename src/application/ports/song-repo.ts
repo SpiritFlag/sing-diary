@@ -25,4 +25,11 @@ export interface SongRepo {
   updateMeta(ownerId: string, songId: string, patch: SongMetaPatch): Promise<boolean>;
   setNumber(ownerId: string, songId: string, brand: Brand, input: NumberInput): Promise<boolean>;
   clearNumber(ownerId: string, songId: string, brand: Brand): Promise<boolean>;
+
+  // Design Ref: expand-playlist-import §3.3, §2.3 D-P — 소유권 확인 겸 단건 조회.
+  // entries.song_id는 FK일 뿐 owner를 모른다. songId를 클라이언트가 직접 지목하는 경로가
+  // 생기는 순간(addEntryBySong) 확인 없이 append하면 타 owner의 곡을 내 세션에 붙일 수 있다.
+  // updateMeta/setNumber의 touch와 달리 부수효과가 없다 — 조회일 뿐이므로 updated_at을
+  // 건드리지 않는다(M3 빈칸채우기 큐가 updated_at을 신선도 신호로 쓴다).
+  findByIdForOwner(ownerId: string, songId: string): Promise<Song | null>;
 }

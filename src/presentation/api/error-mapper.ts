@@ -2,7 +2,7 @@
 import { DomainError } from "@/domain";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { UnauthorizedError } from "./auth";
+import { UnauthorizedError } from "@/presentation/auth/api-guard";
 
 type ApiErrorCode =
   | "VALIDATION_ERROR"

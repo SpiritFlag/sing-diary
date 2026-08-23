@@ -1,13 +1,8 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
-// Design Ref: §7 아키텍처 결정 — 인증은 Clerk middleware가 /(app) 이하 전체를 보호
-const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
-
-export default clerkMiddleware(async (auth, req) => {
-  if (!isPublicRoute(req)) {
-    await auth.protect();
-  }
-});
+// Design Ref: refine-auth-boundary §2.3 D-A — 보호는 리소스(라우트·페이지)가 한다.
+// 미들웨어는 auth() 컨텍스트 공급용 껍데기. createRouteMatcher/auth.protect()는 쓰지 않는다.
+export default clerkMiddleware();
 
 export const config = {
   matcher: [

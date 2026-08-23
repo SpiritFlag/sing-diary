@@ -5,6 +5,7 @@
 - 배포: [sing-diary.spiritflag.work](https://sing-diary.spiritflag.work)
 - 아키텍처: [docs/architect/ARCHITECT.md](docs/architect/ARCHITECT.md)
 - 첫 릴리스(v1.0.0) 산출물: [docs/PDCA/2026-08/first-take/](docs/PDCA/2026-08/first-take/)
+- 인증 경계 이관(v1.0.1) 산출물: [docs/PDCA/2026-08/refine-auth-boundary/](docs/PDCA/2026-08/refine-auth-boundary/)
 
 ## 기술 스택
 
@@ -14,7 +15,7 @@
 | 배포 | Vercel |
 | 데이터베이스 | Neon PostgreSQL |
 | ORM | Drizzle |
-| 인증 | Clerk |
+| 인증 | Clerk (리소스 기반 가드 — `middleware.ts`는 `auth()` 컨텍스트 공급용 껍데기) |
 | 스타일 | Tailwind CSS (다크 파스텔) |
 | 아키텍처 | 클린 아키텍처 4계층 (domain / application / infrastructure / presentation) |
 
@@ -38,6 +39,7 @@ npm run dev
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` | Clerk 인증 |
 | `NEXT_PUBLIC_CLERK_DOMAIN` | 프로덕션 커스텀 도메인 배포 시 필요 (Clerk 7.x same-origin 자동 프록시 방지) |
 | `PDCAW_PAT` | PDCA 사이클 종료 절차(`pdcaw upload`) 전용, 로컬 전용 |
+| `L1_VERCEL_BYPASS` | `npm run l1`이 Vercel Preview를 대상으로 할 때만 필요 (Deployment Protection 우회) |
 
 ## 스크립트
 

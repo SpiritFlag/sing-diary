@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "currentFeature": "first-take",
+  "currentFeature": "refine-auth-boundary",
   "features": {
     "first-take": {
       "phase": "completed",
@@ -13,6 +13,24 @@
       "design": "docs/PDCA/2026-08/first-take/first-take.design.md",
       "matchRate": 97,
       "iterationCount": 0
+    },
+    "refine-auth-boundary": {
+      "phase": "completed",
+      "startedAt": "2026-08-23",
+      "docRoot": "docs/PDCA/2026-08/refine-auth-boundary/",
+      "plan": "docs/PDCA/2026-08/refine-auth-boundary/refine-auth-boundary.plan.md",
+      "iterationCount": 0,
+      "backlogItems": [
+        "391c54d6-9a60-4493-97e7-d1650e350246",
+        "c37bd457-2cd1-46cf-9399-116261f4f3dc",
+        "25c9f2bb-e1dc-4282-a5df-b163a5268297"
+      ],
+      "design": "docs/PDCA/2026-08/refine-auth-boundary/refine-auth-boundary.design.md",
+      "architectureOption": "B",
+      "doProgress": "module-1(경계 이관)+module-2(L1 계측+#9) 완료, develop HEAD 8f70257. Preview L1 9/9 통과(cold+warm 각 1회). ★ㄱ 실측 확정: auth.protect() 제거 후 무인증 API가 401(기존 404에서 복구). 발견: 쓰기 경로(#3,5,7,8)는 콜드·워밍 무관 3~4.3s — pg 순수 TCP 요청별 연결 비용, 콜드스타트가 아님. M-2(브라우저 로그인 왕복)·M-5(탭 카운트)는 물리 확인 대신 코드 근거 예상치로 기록(사용자 결정) 후 Check 진행",
+      "matchRate": 98,
+      "analysis": "docs/PDCA/2026-08/refine-auth-boundary/refine-auth-boundary.analysis.md",
+      "report": "docs/PDCA/2026-08/refine-auth-boundary/refine-auth-boundary.report.md"
     }
   }
 }

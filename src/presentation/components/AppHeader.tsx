@@ -25,6 +25,10 @@ export function AppHeader({ session }: { session: Session | null }) {
         <Link href="/songs/search" className="hover:text-text">
           검색
         </Link>
+        {/* Design Ref: expand-playlist-import §5.1 — 지난 플리 진입점(모바일 주 동선) */}
+        <Link href="/sessions" className="hover:text-text">
+          지난 플리
+        </Link>
         <Link href="/songs" className="hover:text-text">
           곡 관리
         </Link>

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "currentFeature": "expand-song-catalog",
+  "currentFeature": "expand-playlist-import",
   "features": {
     "first-take": {
       "phase": "completed",
@@ -51,6 +51,33 @@
       "analysis": "docs/PDCA/2026-08/expand-song-catalog/expand-song-catalog.analysis.md",
       "checkNote": "gap-detector 독립검증: Structural 100/Functional 88(수정전)/Contract 95/Runtime 100. Gap 8건(Critical 1: G-1 UNSUPPORTED→행없음 UI 도달불가 / Important 3: G-2 owner필터누락 중복stub, G-3 셀 응답역전 레이스, G-4 eslint glob 사각지대 / Minor 4). 사용자 승인으로 Critical+Important 4건 즉시 수정, L1 19/19 재확인(build 018975d→5de1977→7c63d57 3회 전부), 회귀테스트 1건 추가(30/30). 최종 Match Rate 98%, iterate 불필요, report로 진행.",
       "report": "docs/PDCA/2026-08/expand-song-catalog/expand-song-catalog.report.md"
+    },
+    "expand-playlist-import": {
+      "phase": "completed",
+      "startedAt": "2026-08-23",
+      "docRoot": "docs/PDCA/2026-08/expand-playlist-import/",
+      "plan": "docs/PDCA/2026-08/expand-playlist-import/expand-playlist-import.plan.md",
+      "iterationCount": 1,
+      "backlogItems": [
+        "27178302-3ba1-4416-a77a-27926801fad4",
+        "55992dd3-2a47-4213-92ea-5b05773a49ea",
+        "2ab85325-8d17-44df-92c1-f082a2132446"
+      ],
+      "design": "docs/PDCA/2026-08/expand-playlist-import/expand-playlist-import.design.md",
+      "architectureOption": "B",
+      "completedModules": [
+        "module-1",
+        "module-2",
+        "module-3",
+        "module-4",
+        "module-5",
+        "module-6"
+      ],
+      "updatedAt": "2026-08-23T09:13:38.345Z",
+      "matchRate": 100,
+      "analysis": "docs/PDCA/2026-08/expand-playlist-import/expand-playlist-import.analysis.md",
+      "report": "docs/PDCA/2026-08/expand-playlist-import/expand-playlist-import.report.md"
     }
-  }
+  },
+  "currentPhase": "do"
 }

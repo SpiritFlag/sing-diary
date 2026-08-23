@@ -7,6 +7,7 @@
 - 첫 릴리스(v1.0.0) 산출물: [docs/PDCA/2026-08/first-take/](docs/PDCA/2026-08/first-take/)
 - 인증 경계 이관(v1.0.1) 산출물: [docs/PDCA/2026-08/refine-auth-boundary/](docs/PDCA/2026-08/refine-auth-boundary/)
 - 곡 카탈로그 확장(v1.1.0) 산출물: [docs/PDCA/2026-08/expand-song-catalog/](docs/PDCA/2026-08/expand-song-catalog/)
+- 지난 플리 가져오기(v1.1.1) 산출물: [docs/PDCA/2026-08/expand-playlist-import/](docs/PDCA/2026-08/expand-playlist-import/)
 
 ## 기술 스택
 

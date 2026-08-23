@@ -24,11 +24,32 @@ function log(...args) {
 
 // Design Ref: refine-auth-boundary §8.2 D-H — 응답 헤더 수신까지의 클라이언트 측 왕복시간(ms)을
 // 재서 Response에 스탬프한다. 콜드스타트·네트워크를 포함한 사용자 체감에 가장 가깝다.
+// Clerk 세션 JWT는 수명이 60초다. 케이스가 늘어 실행이 그 창을 넘기면 뒤쪽 케이스가 통째로
+// 401을 맞는다(expand-fill-queue module-1에서 #30 이후가 실제로 그렇게 깨졌다). 토큰을 한 번만
+// 발급해 두는 대신, 요청 직전에 40초를 넘겼으면 다시 민팅한다. 케이스 코드는 손대지 않는다 —
+// authHeader를 그대로 쓰면 req()가 알아서 최신 값으로 갈아끼운다.
+const TOKEN_MAX_AGE_MS = 40_000;
+let authState = null;
+
+async function currentAuthorization() {
+  if (!authState) return null;
+  if (performance.now() - authState.mintedAt > TOKEN_MAX_AGE_MS) {
+    const fresh = await authState.clerk.sessions.getToken(authState.sessionId);
+    authState.jwt = fresh.jwt;
+    authState.mintedAt = performance.now();
+  }
+  return `Bearer ${authState.jwt}`;
+}
+
 async function req(path, opts = {}) {
+  const headers = { ...opts.headers, ...bypassHeader };
+  if (headers.Authorization) {
+    headers.Authorization = (await currentAuthorization()) ?? headers.Authorization;
+  }
   const start = performance.now();
   const res = await fetch(`${TARGET_URL}${path}`, {
     ...opts,
-    headers: { ...opts.headers, ...bypassHeader },
+    headers,
   });
   res.elapsedMs = Math.round(performance.now() - start);
   return res;
@@ -88,6 +109,7 @@ async function main() {
     throw new Error(`created_session_id를 못 찾음: ${JSON.stringify(redeemBody)}`);
   }
   const token = await clerk.sessions.getToken(sessionId);
+  authState = { clerk, sessionId, jwt: token.jwt, mintedAt: performance.now() };
   const authHeader = { Authorization: `Bearer ${token.jwt}` };
   log(`테스트 유저 ${user.id} 세션 발급 완료`);
 

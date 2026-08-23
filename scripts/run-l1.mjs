@@ -503,6 +503,74 @@ async function main() {
         pass,
       );
     }
+
+    // ── expand-fill-queue module-1 — 빈칸채우기 큐 읽기 경로(§8.2 #29·30·36·38) ──
+    // 이 시점 songId의 상태: TJ는 UNSUPPORTED 행 있음(#26), KY는 행 없음(#18 이후 재생성 없음),
+    // title은 NULL(#19). 즉 TJ 큐에는 없고 KY 큐·메타 큐에는 있어야 한다.
+
+    // 29. GET /api/songs/fill — 미인증 — 401 UNAUTHORIZED
+    {
+      const res = await req("/api/songs/fill");
+      const body = await res.json().catch(() => null);
+      const pass = res.status === 401 && body?.error?.code === "UNAUTHORIZED";
+      record(29, "GET songs/fill (미인증)", 401, res, body, pass);
+    }
+
+    // 정렬 검증(#38)용 두 번째 곡 — songId보다 나중에 생긴다. TJ 번호를 달고 태어나므로 KY 큐 대상이다.
+    let laterSongId;
+    {
+      const res = await req(`/api/sessions/${sessionId}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ number: "77777" }),
+      });
+      const body = await res.json().catch(() => null);
+      laterSongId = body?.data?.song?.id;
+      log(`#38용 후속 곡 생성: ${laterSongId}`);
+    }
+
+    // 30. GET /api/songs/fill — 200 + 세 큐가 §5.6 기준대로 선별한다
+    {
+      const res = await req("/api/songs/fill", { headers: authHeader });
+      const body = await res.json().catch(() => null);
+      const snapshot = body?.data;
+      const ids = (k) => (Array.isArray(snapshot?.[k]) ? snapshot[k].map((s) => s.id) : null);
+      const tj = ids("tj");
+      const ky = ids("ky");
+      const meta = ids("meta");
+      const pass =
+        res.status === 200 &&
+        Array.isArray(tj) &&
+        Array.isArray(ky) &&
+        Array.isArray(meta) &&
+        // TJ 행이 UNSUPPORTED로 존재 → 결손이 아니다(기준은 "행 없음")
+        !tj.includes(songId) &&
+        ky.includes(songId) &&
+        meta.includes(songId);
+      record(30, "GET songs/fill 스냅샷 선별", 200, res, { tj, ky, meta }, pass);
+    }
+
+    // 36. 타 owner 결손 곡은 세 배열 어디에도 없다
+    {
+      const res = await req("/api/songs/fill", { headers: authHeader });
+      const body = await res.json().catch(() => null);
+      const all = ["tj", "ky", "meta"].flatMap((k) =>
+        Array.isArray(body?.data?.[k]) ? body.data[k].map((s) => s.id) : [],
+      );
+      const pass = res.status === 200 && !all.includes(otherSongId);
+      record(36, "songs/fill 타owner 미노출", 200, res, { otherSongId }, pass);
+    }
+
+    // 38. 정렬 — created_at ASC (D-C). 먼저 생긴 songId가 나중에 생긴 laterSongId보다 앞이다.
+    {
+      const res = await req("/api/songs/fill", { headers: authHeader });
+      const body = await res.json().catch(() => null);
+      const ky = Array.isArray(body?.data?.ky) ? body.data.ky.map((s) => s.id) : [];
+      const first = ky.indexOf(songId);
+      const later = ky.indexOf(laterSongId);
+      const pass = res.status === 200 && first >= 0 && later >= 0 && first < later;
+      record(38, "songs/fill 정렬 created_at ASC", 200, res, { first, later }, pass);
+    }
   } finally {
     log("정리 중 — 테스트 유저 소유 데이터만 정확히 scope해서 삭제...");
     const pg = new Client({ connectionString: databaseUrl });

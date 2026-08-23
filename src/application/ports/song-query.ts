@@ -13,6 +13,21 @@ export interface SongListItem {
   updatedAt: Date;
 }
 
+/**
+ * 빈칸채우기 큐 스냅샷 (ARCHITECT §5.6).
+ * Design Ref: expand-fill-queue §3.2 D-A — 세 큐를 한 번에 낸다. 탭 전환은 재조회를 부르지 않는다.
+ * 한 곡이 여러 배열에 중복 등장할 수 있다(양 브랜드 결손 + title NULL인 stub — Plan R3).
+ * 정규화는 클라이언트의 몫이다(D-D).
+ */
+export interface FillQueueSnapshot {
+  /** 큐 A — TJ song_numbers 행이 없는 곡. created_at ASC (D-C) */
+  tj: SongListItem[];
+  /** 큐 A — KY song_numbers 행이 없는 곡. created_at ASC */
+  ky: SongListItem[];
+  /** 큐 B — title IS NULL OR artist IS NULL. created_at ASC */
+  meta: SongListItem[];
+}
+
 export interface SongQuery {
   /** owner 스코프 통합검색. keyword는 이미 trim된 비어있지 않은 문자열 */
   search(ownerId: string, keyword: string): Promise<SongListItem[]>;
@@ -20,4 +35,9 @@ export interface SongQuery {
   list(ownerId: string): Promise<SongListItem[]>;
   /** 수정 후 확정값 반환용 단건 조회. 타 owner면 null */
   findById(ownerId: string, songId: string): Promise<SongListItem | null>;
+  /**
+   * 빈칸채우기 큐 스냅샷. 세 쿼리를 병렬 실행한다 (§5.6 이행, expand-fill-queue §3.3).
+   * 정렬은 created_at ASC — 묵은 결손부터이며, 저장이 updated_at을 touch해도 순서가 흔들리지 않는다(D-C).
+   */
+  fillQueue(ownerId: string): Promise<FillQueueSnapshot>;
 }

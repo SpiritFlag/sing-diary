@@ -572,6 +572,121 @@ async function main() {
       record(30, "GET songs/fill 스냅샷 선별", 200, res, { tj, ky, meta }, pass);
     }
 
+    // ── 큐 선별의 몸통(§8.2 #31~35·37) — 신규 라우트가 읽기 전용이라 검증은 시나리오 단위다.
+    //    기존 쓰기 라우트를 치고 스냅샷을 재조회해 대조한다(Plan R7의 해소).
+    const fillIds = async (key) => {
+      const res = await req("/api/songs/fill", { headers: authHeader });
+      const body = await res.json().catch(() => null);
+      return { res, ids: Array.isArray(body?.data?.[key]) ? body.data[key].map((s) => s.id) : [], body };
+    };
+
+    // 큐 시나리오 전용 곡 — 번호를 달고 태어난 뒤 TJ 행을 지워 "행 없음"으로 만든다.
+    let queueSongId;
+    {
+      const created = await req(`/api/sessions/${sessionId}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ number: "88888" }),
+      });
+      const body = await created.json().catch(() => null);
+      queueSongId = body?.data?.song?.id;
+      await req(`/api/songs/${queueSongId}/numbers/TJ`, { method: "DELETE", headers: authHeader });
+      log(`큐 시나리오 곡 준비: ${queueSongId} (TJ 행 없음, title NULL)`);
+    }
+
+    // 31. 번호 확정 → 그 브랜드 큐에서만 빠진다. 반대 브랜드 큐 잔류는 불변이어야 한다.
+    {
+      const res = await req(`/api/songs/${queueSongId}/numbers/TJ`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ status: "AVAILABLE", number: "88888" }),
+      });
+      const tj = await fillIds("tj");
+      const ky = await fillIds("ky");
+      const pass =
+        res.status === 200 && !tj.ids.includes(queueSongId) && ky.ids.includes(queueSongId);
+      record(31, "PUT numbers AVAILABLE → 큐 A 이탈(반대 브랜드 잔류)", 200, res, { tj: tj.ids.length }, pass);
+    }
+
+    // 32. UNSUPPORTED도 이탈한다 — §5.6 기준은 "행 없음"이지 "AVAILABLE"이 아니다.
+    {
+      await req(`/api/songs/${queueSongId}/numbers/TJ`, { method: "DELETE", headers: authHeader });
+      const res = await req(`/api/songs/${queueSongId}/numbers/TJ`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ status: "UNSUPPORTED" }),
+      });
+      const tj = await fillIds("tj");
+      const pass = res.status === 200 && !tj.ids.includes(queueSongId);
+      record(32, "PUT numbers UNSUPPORTED → 큐 A 이탈", 200, res, { tj: tj.ids.length }, pass);
+    }
+
+    // 33. 행을 지우면 결손으로 되돌아온다.
+    {
+      const res = await req(`/api/songs/${queueSongId}/numbers/TJ`, {
+        method: "DELETE",
+        headers: authHeader,
+      });
+      const tj = await fillIds("tj");
+      const pass = res.status === 200 && tj.ids.includes(queueSongId);
+      record(33, "DELETE numbers → 큐 A 복귀", 200, res, { tj: tj.ids.length }, pass);
+    }
+
+    // 37. 3-state 무손상 — #31~33을 거친 뒤에도 (곡, 브랜드) 행이 최대 하나다. DB에서 직접 센다.
+    {
+      const pgCheck = new Client({ connectionString: databaseUrl });
+      await pgCheck.connect();
+      let rowCount;
+      try {
+        const { rows } = await pgCheck.query(
+          `SELECT count(*)::int AS n FROM song_numbers WHERE song_id = $1 AND brand = 'TJ'`,
+          [queueSongId],
+        );
+        rowCount = rows[0].n;
+      } finally {
+        await pgCheck.end();
+      }
+      record(
+        37,
+        `3-state 무손상 — (곡,TJ) 행 ${rowCount}개`,
+        "<=1",
+        { status: 200, elapsedMs: 0 },
+        { rowCount },
+        rowCount <= 1,
+      );
+    }
+
+    // 34. 큐 B 이탈 — title·artist 둘 다 채우면 메타 큐에서 빠진다.
+    {
+      const res = await req(`/api/songs/${queueSongId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ title: "큐검증곡", artist: "큐가수" }),
+      });
+      const meta = await fillIds("meta");
+      const pass = res.status === 200 && !meta.ids.includes(queueSongId);
+      record(34, "PATCH title·artist → 큐 B 이탈", 200, res, { meta: meta.ids.length }, pass);
+    }
+
+    // 35. 큐 B 잔류 — 한쪽만 채우면 OR 조건 때문에 남는다.
+    {
+      const created = await req(`/api/sessions/${sessionId}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ number: "88889" }),
+      });
+      const createdBody = await created.json().catch(() => null);
+      const halfSongId = createdBody?.data?.song?.id;
+      const res = await req(`/api/songs/${halfSongId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ title: "제목만있는곡" }),
+      });
+      const meta = await fillIds("meta");
+      const pass = res.status === 200 && meta.ids.includes(halfSongId);
+      record(35, "PATCH title만 → 큐 B 잔류(OR 조건)", 200, res, { meta: meta.ids.length }, pass);
+    }
+
     // 36. 타 owner 결손 곡은 세 배열 어디에도 없다
     {
       const res = await req("/api/songs/fill", { headers: authHeader });

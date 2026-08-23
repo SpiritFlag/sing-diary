@@ -10,11 +10,14 @@ import type { FillDraft } from "./fill-queue-state";
 export function FillCardMeta({
   song,
   draft,
+  canSkip,
   onSave,
   onSkip,
 }: {
   song: SongListItem;
   draft: FillDraft | null;
+  /** 남은 카드가 1장뿐이면 뒤로 밀 자리가 없다 (Check Gap-3) */
+  canSkip: boolean;
   onSave: (patch: { title: string; artist: string }) => void;
   onSkip: () => void;
 }) {
@@ -71,7 +74,8 @@ export function FillCardMeta({
         <button
           type="button"
           onClick={onSkip}
-          className="rounded-lg bg-surface-raised px-3 py-2 text-text-dim hover:text-text"
+          disabled={!canSkip}
+          className="rounded-lg bg-surface-raised px-3 py-2 text-text-dim hover:text-text disabled:opacity-40"
         >
           건너뛰기
         </button>

@@ -46,6 +46,7 @@ const snapshot: FillQueueSnapshot = {
   tj: [stub, tjOnly],
   ky: [stub],
   meta: [stub, titleNull],
+  totalSongs: 5,
 };
 
 describe("빈칸채우기 큐 상태 머신 (expand-fill-queue §8.3)", () => {
@@ -197,5 +198,19 @@ describe("빈칸채우기 큐 상태 머신 (expand-fill-queue §8.3)", () => {
     // 기준은 "행 없음"이다 — UNSUPPORTED 행이 생겼으므로 결손이 아니다
     expect(s2.tabs.tj).toEqual(["stub"]);
     expect(s2.songs.get("tjOnly")?.numbers.TJ).toEqual({ status: "UNSUPPORTED", number: null });
+  });
+
+  it("#9 빈 상태 판정 — 결손 0과 곡 0은 다른 상태다 (Check Gap-1)", () => {
+    // 다 채운 사용자: 스냅샷 세 배열이 비었지만 곡은 50개 있다. "아직 곡이 없어요"는 거짓말이다.
+    const filled = initialState({ tj: [], ky: [], meta: [], totalSongs: 50 });
+    expect(filled.totalSongs).toBe(50);
+    expect(isComplete(filled)).toBe(true);
+
+    // 정말로 곡이 없는 사용자만 0이다.
+    const empty = initialState({ tj: [], ky: [], meta: [], totalSongs: 0 });
+    expect(empty.totalSongs).toBe(0);
+
+    // 두 경우 모두 탭은 비어 있다 — 그래서 탭 길이로는 절대 구분할 수 없다.
+    expect(filled.tabs).toEqual(empty.tabs);
   });
 });

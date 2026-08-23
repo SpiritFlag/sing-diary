@@ -26,6 +26,12 @@ export interface FillQueueSnapshot {
   ky: SongListItem[];
   /** 큐 B — title IS NULL OR artist IS NULL. created_at ASC */
   meta: SongListItem[];
+  /**
+   * owner의 전체 곡 수. 세 배열이 전부 비었을 때 "아직 곡이 없어요"와 "다 채웠어요"를
+   * 가르는 유일한 단서다 — 결손 0과 곡 0은 스냅샷만으로는 구분되지 않는다(Check Gap-1).
+   * 건수 자체는 여전히 배열 길이에서 파생한다(§4.2). 이 필드는 배지가 아니라 빈 상태 판정용이다.
+   */
+  totalSongs: number;
 }
 
 export interface SongQuery {

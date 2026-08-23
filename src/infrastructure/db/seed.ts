@@ -32,34 +32,41 @@ export async function resetAndSeed(db: Database): Promise<SeedResult> {
   await db.delete(sessions);
   await db.delete(songs);
 
+  // Check Gap-4 — created_at을 명시한다. defaultNow()는 트랜잭션 시각이라, 누가 이 시드를
+  // db.transaction()으로 감싸거나 multi-row insert로 합치는 순간 전부 같은 값이 된다.
+  // 그러면 큐 정렬의 타이브레이커(id ASC)가 랜덤 UUID라 정렬 테스트가 간헐적으로 붉어진다.
+  // §8.5의 "created_at 상이"를 우연이 아니라 강제로 만든다.
+  const at = (minutes: number) => new Date(Date.UTC(2026, 7, 1, 0, minutes, 0));
+
   const [normalSong] = await db
     .insert(songs)
-    .values({ ownerId: SEED_USERS.a, title: "기존 곡", artist: "가수 A" })
+    .values({ ownerId: SEED_USERS.a, title: "기존 곡", artist: "가수 A", createdAt: at(0) })
     .returning({ id: songs.id });
   const [stubSong] = await db
     .insert(songs)
-    .values({ ownerId: SEED_USERS.a, title: null, artist: null })
+    .values({ ownerId: SEED_USERS.a, title: null, artist: null, createdAt: at(1) })
     .returning({ id: songs.id });
   const [othersSong] = await db
     .insert(songs)
-    .values({ ownerId: SEED_USERS.b, title: "타인 곡", artist: "가수 B" })
+    .values({ ownerId: SEED_USERS.b, title: "타인 곡", artist: "가수 B", createdAt: at(2) })
     .returning({ id: songs.id });
 
   // expand-fill-queue §8.5 — 빈칸채우기 큐 fixture.
   // 기존 세 곡(normal=결손 없음 대조군, stub=양 브랜드+메타 결손, othersOwned=타 owner 결손)은
   // 그대로 두고 세 건만 덧댄다. 제목에 "기존"·"타인"을 쓰지 않는다 — 기존 검색 테스트의 매칭 집합을 흔들지 않기 위함.
+  // created_at은 stub(1분) < tjOnly1(3분) < tjOnly2(4분) — 큐 정렬 단언(§8.2 #38)이 기대는 순서다.
   const [tjOnly1] = await db
     .insert(songs)
-    .values({ ownerId: SEED_USERS.a, title: "큐 곡 하나", artist: "가수 C" })
+    .values({ ownerId: SEED_USERS.a, title: "큐 곡 하나", artist: "가수 C", createdAt: at(3) })
     .returning({ id: songs.id });
   const [tjOnly2] = await db
     .insert(songs)
-    .values({ ownerId: SEED_USERS.a, title: "큐 곡 둘", artist: "가수 D" })
+    .values({ ownerId: SEED_USERS.a, title: "큐 곡 둘", artist: "가수 D", createdAt: at(4) })
     .returning({ id: songs.id });
   // title만 NULL — artist가 있으므로 list의 NULLS FIRST 정렬에서 stub보다 뒤에 선다(기존 단언 보존).
   const [titleOnlyNull] = await db
     .insert(songs)
-    .values({ ownerId: SEED_USERS.a, title: null, artist: "가수 E" })
+    .values({ ownerId: SEED_USERS.a, title: null, artist: "가수 E", createdAt: at(5) })
     .returning({ id: songs.id });
 
   await db.insert(songNumbers).values([

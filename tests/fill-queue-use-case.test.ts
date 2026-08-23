@@ -2,9 +2,10 @@
 // 그대로 도는지를 실 Neon 테스트 브랜치 위에서 확인한다. UI가 없어도 계약은 여기서 선다.
 import { beforeAll, describe, expect, it } from "vitest";
 import { resetAndSeed, SEED_USERS } from "../src/infrastructure/db/seed";
-import { activateTestDatabase } from "./support/db";
+import { activateTestDatabase, warnIfNoTestDatabase } from "./support/db";
 
-const hasDb = Boolean(process.env.TEST_DATABASE_URL);
+// 조용히 사라지지 않게 한 번 외친다 (Check Gap-6)
+const hasDb = warnIfNoTestDatabase("빈칸채우기 큐 선별");
 
 describe.skipIf(!hasDb)("빈칸채우기 큐 선별 (expand-fill-queue §3.3)", () => {
   let db: (typeof import("../src/infrastructure/db/client"))["db"];
@@ -32,6 +33,15 @@ describe.skipIf(!hasDb)("빈칸채우기 큐 선별 (expand-fill-queue §3.3)", 
     // 양 브랜드 다 있는 곡은 어느 큐에도 없다
     expect(tj).not.toContain(seed.songs.normal);
     expect(ky).not.toContain(seed.songs.normal);
+  });
+
+  it("totalSongs — owner 전체 곡 수를 함께 실어 온다. 타 owner는 세지 않는다 (Check Gap-1)", async () => {
+    const mine = await useCases.getFillQueue(SEED_USERS.a);
+    // 시드의 A 소유 곡: normal · stub · tjOnly1 · tjOnly2 · titleOnlyNull = 5건
+    expect(mine.totalSongs).toBe(5);
+    // 결손이 하나도 없는 owner여도 곡 수는 실려야 한다 — 그래야 "다 채웠어요"를 말할 수 있다
+    const others = await useCases.getFillQueue(SEED_USERS.b);
+    expect(others.totalSongs).toBe(1);
   });
 
   it("큐 B: title IS NULL OR artist IS NULL — OR 조건이라 한쪽만 비어도 대상이다", async () => {

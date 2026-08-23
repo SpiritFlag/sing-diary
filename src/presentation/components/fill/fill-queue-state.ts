@@ -51,6 +51,11 @@ export interface FillState {
   drafts: ReadonlyMap<string, FillDraft>;
   /** 이번 방문 시작 시점의 분모. 진행 표시 n/N의 N (FR-06) */
   totals: Record<TabKey, number>;
+  /**
+   * owner의 전체 곡 수(스냅샷이 실어 온 값). 빈 상태 3종을 가르는 데만 쓴다 —
+   * 0이면 "아직 곡이 없어요", 0보다 큰데 할 일이 없으면 "다 채웠어요"다 (Check Gap-1).
+   */
+  totalSongs: number;
   failedCount: number;
 }
 
@@ -96,6 +101,7 @@ export function initialState(snapshot: FillQueueSnapshot): FillState {
     waiting: [],
     drafts: new Map(),
     totals: { tj: tabs.tj.length, ky: tabs.ky.length, meta: tabs.meta.length },
+    totalSongs: snapshot.totalSongs,
     failedCount: 0,
   };
 }

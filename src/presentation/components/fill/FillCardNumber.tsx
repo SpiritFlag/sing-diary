@@ -26,12 +26,15 @@ export function FillCardNumber({
   song,
   brand,
   draft,
+  canSkip,
   onSave,
   onSkip,
 }: {
   song: SongListItem;
   brand: Brand;
   draft: FillDraft | null;
+  /** 남은 카드가 1장뿐이면 뒤로 밀 자리가 없다 — 버튼이 죽은 게 아니라 할 일이 없는 것이다 (Check Gap-3) */
+  canSkip: boolean;
   onSave: (input: NumberInput) => void;
   onSkip: () => void;
 }) {
@@ -58,8 +61,11 @@ export function FillCardNumber({
             {OTHER[brand]} {other.number}
           </p>
         )}
+        {/* 미지원 저장은 되살릴 입력값이 없다 — 없는 값을 "그대로 뒀다"고 하지 않는다 (Check Gap-2) */}
         {draft && (
-          <p className="text-xs text-danger">저장에 실패해 돌아온 곡이에요. 값은 그대로 뒀어요.</p>
+          <p className="text-xs text-danger">
+            저장에 실패해 돌아온 곡이에요.{restored ? " 값은 그대로 뒀어요." : " 다시 눌러 주세요."}
+          </p>
         )}
       </div>
 
@@ -93,7 +99,8 @@ export function FillCardNumber({
         <button
           type="button"
           onClick={onSkip}
-          className="rounded-lg bg-surface-raised px-3 py-2 text-text-dim hover:text-text"
+          disabled={!canSkip}
+          className="rounded-lg bg-surface-raised px-3 py-2 text-text-dim hover:text-text disabled:opacity-40"
         >
           건너뛰기
         </button>

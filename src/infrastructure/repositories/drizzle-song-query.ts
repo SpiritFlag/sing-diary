@@ -1,5 +1,5 @@
 // Design Ref: §3.4, §9.4, §1.3 ★ⓐ — SongQuery의 Drizzle 구현. 읽기 전용, Neon HTTP 드라이버(db) 사용.
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, count, eq, isNull, or, sql } from "drizzle-orm";
 import type { Brand } from "@/domain";
 import type {
   FillQueueSnapshot,
@@ -103,7 +103,7 @@ export function createDrizzleSongQuery(db: DbOrTx): SongQuery {
           orderBy: FILL_SORT_ORDER,
         });
 
-      const [tj, ky, meta] = await Promise.all([
+      const [tj, ky, meta, counted] = await Promise.all([
         byBrand("TJ"),
         byBrand("KY"),
         // 큐 B — §5.6 원문 그대로 title/artist만 본다. memo는 큐 대상이 아니다.
@@ -115,12 +115,16 @@ export function createDrizzleSongQuery(db: DbOrTx): SongQuery {
           with: { numbers: true },
           orderBy: FILL_SORT_ORDER,
         }),
+        // Check Gap-1 — 결손 0과 곡 0을 가르는 값. 네 번째 발이지만 같은 Promise.all이라
+        // 벽시계는 여전히 가장 느린 하나다. 행을 세기만 하므로 relation 로드도 없다.
+        db.select({ n: count() }).from(songs).where(eq(songs.ownerId, ownerId)),
       ]);
 
       return {
         tj: tj.map(toListItem),
         ky: ky.map(toListItem),
         meta: meta.map(toListItem),
+        totalSongs: counted[0]?.n ?? 0,
       };
     },
   };

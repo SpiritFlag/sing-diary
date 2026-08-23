@@ -129,6 +129,8 @@ export function FillQueue({ initial }: { initial: FillQueueSnapshot }) {
   const card = currentCard(state, tab);
   const progress = progressOf(state, tab);
   const done = isComplete(state);
+  // skip()은 1원소 배열을 회전시켜도 항등이라 no-op이다 — 그 사실을 버튼에 드러낸다 (Check Gap-3)
+  const canSkip = state.tabs[tab].length > 1;
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-4 p-4">
@@ -150,7 +152,9 @@ export function FillQueue({ initial }: { initial: FillQueueSnapshot }) {
         ))}
       </div>
 
-      {state.songs.size === 0 ? (
+      {/* Design Ref: §5.1 빈 상태 3종 — 판정 기준은 스냅샷 크기가 아니라 전체 곡 수다(Check Gap-1).
+          songs.size로 재면 다 채운 사용자에게 "아직 곡이 없어요"라고 거짓말한다. */}
+      {state.totalSongs === 0 ? (
         <EmptyState
           title="아직 곡이 없어요"
           hint="현장에서 곡을 추가하면 채울 빈칸이 여기 모여요."
@@ -167,6 +171,7 @@ export function FillQueue({ initial }: { initial: FillQueueSnapshot }) {
               key={card.id}
               song={card}
               draft={draftFor(state, tab, card.id)}
+              canSkip={canSkip}
               onSave={(patch) => saveMeta(card.id, patch)}
               onSkip={() => commit(skip(stateRef.current, tab))}
             />
@@ -176,6 +181,7 @@ export function FillQueue({ initial }: { initial: FillQueueSnapshot }) {
               song={card}
               brand={tab === "tj" ? "TJ" : "KY"}
               draft={draftFor(state, tab, card.id)}
+              canSkip={canSkip}
               onSave={(input) => saveNumber(card.id, tab === "tj" ? "TJ" : "KY", input)}
               onSkip={() => commit(skip(stateRef.current, tab))}
             />

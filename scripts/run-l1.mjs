@@ -568,8 +568,16 @@ async function main() {
         // TJ 행이 UNSUPPORTED로 존재 → 결손이 아니다(기준은 "행 없음")
         !tj.includes(songId) &&
         ky.includes(songId) &&
-        meta.includes(songId);
-      record(30, "GET songs/fill 스냅샷 선별", 200, res, { tj, ky, meta }, pass);
+        meta.includes(songId) &&
+        // 빈 상태 3종을 가르는 계약 필드 — 결손이 0이어도 곡이 0인지는 이 값만이 안다(Check Gap-1)
+        typeof snapshot?.totalSongs === "number" &&
+        snapshot.totalSongs > 0;
+      record(30, "GET songs/fill 스냅샷 선별 + totalSongs", 200, res, {
+        tj,
+        ky,
+        meta,
+        totalSongs: snapshot?.totalSongs,
+      }, pass);
     }
 
     // ── 큐 선별의 몸통(§8.2 #31~35·37) — 신규 라우트가 읽기 전용이라 검증은 시나리오 단위다.
@@ -595,7 +603,10 @@ async function main() {
     }
 
     // 31. 번호 확정 → 그 브랜드 큐에서만 빠진다. 반대 브랜드 큐 잔류는 불변이어야 한다.
+    //     "불변"은 사전 상태를 잡아야 잴 수 있다 — 사후 소속만 보면 원래 그랬던 것과 구분이 안 된다(Check Gap-5).
     {
+      const beforeTj = await fillIds("tj");
+      const beforeKy = await fillIds("ky");
       const res = await req(`/api/songs/${queueSongId}/numbers/TJ`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeader },
@@ -603,9 +614,15 @@ async function main() {
       });
       const tj = await fillIds("tj");
       const ky = await fillIds("ky");
-      const pass =
-        res.status === 200 && !tj.ids.includes(queueSongId) && ky.ids.includes(queueSongId);
-      record(31, "PUT numbers AVAILABLE → 큐 A 이탈(반대 브랜드 잔류)", 200, res, { tj: tj.ids.length }, pass);
+      const leftTj = beforeTj.ids.includes(queueSongId) && !tj.ids.includes(queueSongId);
+      const kyUnchanged = beforeKy.ids.includes(queueSongId) === ky.ids.includes(queueSongId);
+      const pass = res.status === 200 && leftTj && kyUnchanged && ky.ids.includes(queueSongId);
+      record(31, "PUT numbers AVAILABLE → 큐 A 이탈(반대 브랜드 잔류)", 200, res, {
+        tjBefore: beforeTj.ids.includes(queueSongId),
+        tjAfter: tj.ids.includes(queueSongId),
+        kyBefore: beforeKy.ids.includes(queueSongId),
+        kyAfter: ky.ids.includes(queueSongId),
+      }, pass);
     }
 
     // 32. UNSUPPORTED도 이탈한다 — §5.6 기준은 "행 없음"이지 "AVAILABLE"이 아니다.

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "currentFeature": "refine-auth-boundary",
+  "currentFeature": "expand-song-catalog",
   "features": {
     "first-take": {
       "phase": "completed",
@@ -31,6 +31,26 @@
       "matchRate": 98,
       "analysis": "docs/PDCA/2026-08/refine-auth-boundary/refine-auth-boundary.analysis.md",
       "report": "docs/PDCA/2026-08/refine-auth-boundary/refine-auth-boundary.report.md"
+    },
+    "expand-song-catalog": {
+      "phase": "completed",
+      "startedAt": "2026-08-23",
+      "docRoot": "docs/PDCA/2026-08/expand-song-catalog/",
+      "plan": "docs/PDCA/2026-08/expand-song-catalog/expand-song-catalog.plan.md",
+      "iterationCount": 0,
+      "backlogItems": [
+        "27178302-3ba1-4416-a77a-27926801fad4",
+        "bc6382f1-38c5-4065-b083-35c6cbdfb1e8"
+      ],
+      "planNote": "cycle-propose 안 3 채택. M2 4항목 중 통합검색·PC 곡 관리 표 2항목만 + 라우트 가드 강제. 27178302은 §5.4·§5.2가 남아 열린 채 유지. 사용자 결정 4건: 검색→추가는 AVAILABLE 한정 / 인라인 수정은 낙관적 UI / 가드 수단은 Design에서 FR-15로 실증 후 확정 / 표 범위는 ARCHITECT §6 그대로",
+      "design": "docs/PDCA/2026-08/expand-song-catalog/expand-song-catalog.design.md",
+      "architectureOption": "B",
+      "designNote": "Checkpoint 3 = B(클린 분리). ★ⓐ 해소: EXPLAIN 5케이스 실측 — owner 필터 하에선 idx_songs_owner 선택, trgm 미사용. 인덱스 신설 없음/마이그레이션 0건(D-H). ★ⓒ: core no-restricted-syntax 2규칙으로 withAuth 강제 가능, module-1 FR-15에서 실증 예정. R1은 셀 단위 롤백+저장중 셀 잠금(D-G) — Playlist.tsx의 전체 스냅샷 복원 패턴은 표에 금지. 라우트 4개(3-state의 REST 표현으로 numbers가 별도 리소스). module-1(가드 강제+기존 5라우트 이관)을 반드시 먼저.",
+      "doProgress": "module-1~6 전부 완료. develop HEAD 018975d(module-2~6 통합 커밋, module-1은 b14b6e7). Preview https://sing-diary-iq2oxvv1j-jeong-sin-gis-projects.vercel.app 빌드 성공, npm run l1 19/19 통과(기존 9 회귀 0 + 신규 10 전부 통과 — owner 격리 #14, 타owner 404 #15, 3-state 전이 #17/#18, NULL 정규화 #19 포함). ARCHITECT.md §4.1 정정과 PDCA 문서는 RULE.md 사이클 종료 절차(docs+README 1개 커밋)로 미룸. 수동 확인(같은 행 두 셀 연달아 수정, 저장중 잠금, 네트워크 끊고 롤백, 좁은화면 가로스크롤)은 아직 미실시.",
+      "matchRate": 98,
+      "analysis": "docs/PDCA/2026-08/expand-song-catalog/expand-song-catalog.analysis.md",
+      "checkNote": "gap-detector 독립검증: Structural 100/Functional 88(수정전)/Contract 95/Runtime 100. Gap 8건(Critical 1: G-1 UNSUPPORTED→행없음 UI 도달불가 / Important 3: G-2 owner필터누락 중복stub, G-3 셀 응답역전 레이스, G-4 eslint glob 사각지대 / Minor 4). 사용자 승인으로 Critical+Important 4건 즉시 수정, L1 19/19 재확인(build 018975d→5de1977→7c63d57 3회 전부), 회귀테스트 1건 추가(30/30). 최종 Match Rate 98%, iterate 불필요, report로 진행.",
+      "report": "docs/PDCA/2026-08/expand-song-catalog/expand-song-catalog.report.md"
     }
   }
 }

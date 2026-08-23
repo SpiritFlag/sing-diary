@@ -1,7 +1,7 @@
 # ARCHITECT.md
 
 > **sing-diary** — 노래방 점수 기록 서비스
-> Version 1 · 2026-08-22
+> Version 2 · 2026-08-23
 
 ---
 
@@ -62,7 +62,12 @@ User (Clerk)
 
 ```
 INDEX idx_songs_owner        (owner_id)
-INDEX idx_songs_trgm         GIN (title, artist, memo) -- pg_trgm, 통합검색
+INDEX idx_songs_trgm         GIN ((coalesce(title,'') || ' ' || coalesce(artist,'') || ' ' || coalesce(memo,'')) gin_trgm_ops)
+                              -- pg_trgm, 결합 표현식 단일 GIN. 다컬럼 GIN이 아님 — 정정
+                              -- (expand-song-catalog §1.3 ★ⓐ). owner 스코프 검색에서는
+                              -- idx_songs_owner가 선택되어 이 인덱스가 실사용되지 않는다
+                              -- (EXPLAIN 실측, 같은 사이클 Design §1.3). 규모가 커질 때를
+                              -- 대비해 표현식은 유지한다.
 ```
 
 ### 4.2 song_numbers
@@ -249,6 +254,7 @@ memo 결손은 큐 대상이 아니다.
 | D4 | 점수 numeric(5,2), NULL 허용 | KY 소수점 지원. 채점 오류·미채점도 기록 대상 |
 | D5 | 세션 종료는 새 세션 생성 시점 | 자정 초과 사용이 일상적. 수동 종료는 누락됨 |
 | D6 | 오프라인 대응·PWA 미구현 | 사용 환경에서 네트워크 안정적 |
+| D7 | §4.1 `idx_songs_trgm` 표기 정정 — 다컬럼 GIN → 결합 표현식 단일 GIN | first-take 설계 의도와 실제 구현이 처음부터 달랐다(사유는 first-take Design §3.3). M2 착수 전 `EXPLAIN` 실측(expand-song-catalog Design §1.3)으로 확인 후 문서를 실물에 맞춘다 |
 
 ---
 

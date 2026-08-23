@@ -91,6 +91,28 @@ async function main() {
   const authHeader = { Authorization: `Bearer ${token.jwt}` };
   log(`테스트 유저 ${user.id} 세션 발급 완료`);
 
+  // module-6 추가 — #14/#15(owner 격리)용 타 owner 시드 1건. id를 변수로 보관해
+  // finally에서 그 id만 삭제한다(§8.3 — 조건절 범위 삭제 아님, 기존 delete문은 무수정).
+  const OTHER_OWNER_ID = "l1-test-other-owner";
+  const OTHER_SONG_TITLE = "L1엘원다른소유자곡";
+  let otherSongId;
+  {
+    const setupPg = new Client({ connectionString: databaseUrl });
+    await setupPg.connect();
+    try {
+      const { rows } = await setupPg.query(
+        `INSERT INTO songs (owner_id, title, artist, memo) VALUES ($1, $2, NULL, NULL) RETURNING id`,
+        [OTHER_OWNER_ID, OTHER_SONG_TITLE],
+      );
+      otherSongId = rows[0].id;
+      log(`타 owner 시드 곡 생성: ${otherSongId}`);
+    } finally {
+      await setupPg.end();
+    }
+  }
+
+  let songId; // 5번에서 캡처 — 10~19번 곡 카탈로그 테스트가 이 곡을 재사용한다
+
   try {
     // 1. GET /api/sessions/current — 미인증 — 401 UNAUTHORIZED
     {
@@ -146,6 +168,7 @@ async function main() {
       });
       const body = await res.json().catch(() => null);
       entryId = body?.data?.id;
+      songId = body?.data?.song?.id;
       record(
         5,
         "POST entries 정상",
@@ -198,6 +221,126 @@ async function main() {
       const pass = [302, 303, 307, 308].includes(res.status) && location.includes("/sign-in");
       record(9, "GET / (미인증 페이지)", "3xx → /sign-in", res, { location }, pass);
     }
+
+    // Design Ref: expand-song-catalog §8.2 — module-6 추가분. #1~#9는 위 그대로, 여기부터 신설.
+
+    // 10. GET /api/songs/search?q=x — 미인증 — 401 UNAUTHORIZED
+    {
+      const res = await req("/api/songs/search?q=x");
+      const body = await res.json().catch(() => null);
+      const pass = res.status === 401 && body?.error?.code === "UNAUTHORIZED";
+      record(10, "GET songs/search (미인증)", 401, res, body, pass);
+    }
+
+    // 11. GET /api/songs/search?q= — 인증, 빈 키워드 — 400 VALIDATION_ERROR
+    {
+      const res = await req("/api/songs/search?q=", { headers: authHeader });
+      const body = await res.json().catch(() => null);
+      const pass = res.status === 400 && body?.error?.code === "VALIDATION_ERROR";
+      record(11, "GET songs/search q=''", 400, res, body, pass);
+    }
+
+    // 12. GET /api/songs — 인증 — 200, data 배열
+    {
+      const res = await req("/api/songs", { headers: authHeader });
+      const body = await res.json().catch(() => null);
+      const pass = res.status === 200 && Array.isArray(body?.data);
+      record(12, "GET songs 목록", 200, res, body, pass);
+    }
+
+    // 13. 검색 — memo 매칭 확인 (FR-01 핵심). 먼저 5번의 stub 곡 memo를 채운 뒤 그 문자열로 검색
+    const MEMO_MARKER = "L1검색마커";
+    {
+      await req(`/api/songs/${songId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ memo: MEMO_MARKER }),
+      });
+      const res = await req(`/api/songs/search?q=${encodeURIComponent(MEMO_MARKER)}`, {
+        headers: authHeader,
+      });
+      const body = await res.json().catch(() => null);
+      const found = Array.isArray(body?.data) && body.data.some((s) => s.id === songId);
+      record(13, "GET songs/search memo 매칭", 200, res, body, res.status === 200 && found);
+    }
+
+    // 14. 검색 — 타 owner 제목으로는 안 나온다 (owner 스코프, Plan R5 핵심)
+    {
+      const res = await req(
+        `/api/songs/search?q=${encodeURIComponent(OTHER_SONG_TITLE)}`,
+        { headers: authHeader },
+      );
+      const body = await res.json().catch(() => null);
+      const pass = res.status === 200 && Array.isArray(body?.data) && body.data.length === 0;
+      record(14, "GET songs/search 타owner 미노출", 200, res, body, pass);
+    }
+
+    // 15. PATCH /api/songs/:id — 타 owner 곡 — 404 SONG_NOT_FOUND (§2.3 D-E 핵심)
+    {
+      const res = await req(`/api/songs/${otherSongId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ title: "탈취 시도" }),
+      });
+      const body = await res.json().catch(() => null);
+      const pass = res.status === 404 && body?.error?.code === "SONG_NOT_FOUND";
+      record(15, "PATCH songs 타owner", 404, res, body, pass);
+    }
+
+    // 16. PUT songs/:id/numbers/TJ — AVAILABLE + 빈 번호 — 400
+    {
+      const res = await req(`/api/songs/${songId}/numbers/TJ`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ status: "AVAILABLE", number: "" }),
+      });
+      const body = await res.json().catch(() => null);
+      record(16, "PUT numbers AVAILABLE 빈번호", 400, res, body, res.status === 400);
+    }
+
+    // 17. PUT songs/:id/numbers/TJ — UNSUPPORTED — 재조회로 상태 확인
+    {
+      const res = await req(`/api/songs/${songId}/numbers/TJ`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ status: "UNSUPPORTED" }),
+      });
+      const body = await res.json().catch(() => null);
+      const listRes = await req("/api/songs", { headers: authHeader });
+      const listBody = await listRes.json().catch(() => null);
+      const row = listBody?.data?.find((s) => s.id === songId);
+      const pass = res.status === 200 && row?.numbers?.TJ?.status === "UNSUPPORTED";
+      record(17, "PUT numbers UNSUPPORTED → 재조회", 200, res, body, pass);
+    }
+
+    // 18. DELETE songs/:id/numbers/TJ — 재조회로 행 없음(null) 확인 (M3 큐 A 계약 핵심)
+    {
+      const res = await req(`/api/songs/${songId}/numbers/TJ`, {
+        method: "DELETE",
+        headers: authHeader,
+      });
+      const body = await res.json().catch(() => null);
+      const listRes = await req("/api/songs", { headers: authHeader });
+      const listBody = await listRes.json().catch(() => null);
+      const row = listBody?.data?.find((s) => s.id === songId);
+      const pass = res.status === 200 && row?.numbers?.TJ === null;
+      record(18, "DELETE numbers → 재조회 null", 200, res, body, pass);
+    }
+
+    // 19. PATCH songs/:id — title 빈 문자열 — 재조회로 NULL 확인 (M3 큐 B 계약, Plan R4 핵심)
+    {
+      const res = await req(`/api/songs/${songId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        body: JSON.stringify({ title: "  " }),
+      });
+      const body = await res.json().catch(() => null);
+      const listRes = await req("/api/songs", { headers: authHeader });
+      const listBody = await listRes.json().catch(() => null);
+      const row = listBody?.data?.find((s) => s.id === songId);
+      const pass = res.status === 200 && row?.title === null;
+      record(19, "PATCH title 빈문자열 → NULL", 200, res, body, pass);
+    }
   } finally {
     log("정리 중 — 테스트 유저 소유 데이터만 정확히 scope해서 삭제...");
     const pg = new Client({ connectionString: databaseUrl });
@@ -213,6 +356,10 @@ async function main() {
         [user.id],
       );
       await pg.query(`DELETE FROM songs WHERE owner_id = $1`, [user.id]);
+      // module-6 추가 — 타 owner 시드 1건만 id로 정확히 지운다(owner_id 범위 삭제 아님, §8.3)
+      if (otherSongId) {
+        await pg.query(`DELETE FROM songs WHERE id = $1`, [otherSongId]);
+      }
     } finally {
       await pg.end();
     }

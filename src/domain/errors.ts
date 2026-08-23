@@ -5,7 +5,8 @@ export type DomainErrorCode =
   | "SESSION_CLOSED"
   | "ENTRY_NOT_FOUND"
   | "INVALID_SCORE"
-  | "INVALID_POSITION_SET";
+  | "INVALID_POSITION_SET"
+  | "SONG_NOT_FOUND";
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode;

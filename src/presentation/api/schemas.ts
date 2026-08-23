@@ -44,7 +44,6 @@ const nullableText = (max: number) =>
 
 export const searchSongsQuerySchema = z.object({
   q: z.string().trim().min(1, "검색어를 입력하세요").max(100),
-  brand: z.enum(["TJ", "KY"]).optional(),
 });
 
 export const updateSongMetaSchema = z

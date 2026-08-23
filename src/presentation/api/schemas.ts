@@ -18,3 +18,35 @@ export const reorderEntriesSchema = z.object({
 export const updateEntryScoreSchema = z.object({
   score: z.number().min(0).max(100).multipleOf(0.01).nullable(),
 });
+
+// Design Ref: §4.2 D-F — "" → null 정규화의 단일 지점. 이 함수 밖에서 정규화하지 않는다.
+const nullableText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .transform((v) => (v.trim() === "" ? null : v.trim()))
+    .nullable();
+
+export const searchSongsQuerySchema = z.object({
+  q: z.string().trim().min(1, "검색어를 입력하세요").max(100),
+  brand: z.enum(["TJ", "KY"]).optional(),
+});
+
+export const updateSongMetaSchema = z
+  .object({
+    title: nullableText(200).optional(),
+    artist: nullableText(200).optional(),
+    memo: nullableText(500).optional(),
+  })
+  .refine((o) => Object.keys(o).length > 0, "변경할 필드가 없습니다");
+
+// Design Ref: §4.2, §5.4 — 3-state를 타입으로 강제. AVAILABLE엔 번호 필수, UNSUPPORTED엔 번호 금지.
+// .strict()가 없으면 zod object가 알 수 없는 키를 조용히 버려 UNSUPPORTED+number 동봉을 통과시킨다.
+export const setSongNumberSchema = z.discriminatedUnion("status", [
+  z
+    .object({ status: z.literal("AVAILABLE"), number: z.string().trim().min(1).max(10) })
+    .strict(),
+  z.object({ status: z.literal("UNSUPPORTED") }).strict(),
+]);
+
+export const brandParamSchema = z.enum(["TJ", "KY"]);

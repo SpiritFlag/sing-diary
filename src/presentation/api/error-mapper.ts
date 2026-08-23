@@ -13,6 +13,7 @@ type ApiErrorCode =
   | "SESSION_CONFLICT"
   | "INVALID_SCORE"
   | "INVALID_POSITION_SET"
+  | "SONG_NOT_FOUND"
   | "INTERNAL_ERROR";
 
 const DOMAIN_HTTP_STATUS: Record<DomainError["code"], number> = {
@@ -21,6 +22,7 @@ const DOMAIN_HTTP_STATUS: Record<DomainError["code"], number> = {
   SESSION_CLOSED: 409,
   INVALID_SCORE: 400,
   INVALID_POSITION_SET: 400,
+  SONG_NOT_FOUND: 404,
 };
 
 function isPgErrorWithCode(e: unknown, code: string): boolean {

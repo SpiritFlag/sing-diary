@@ -11,5 +11,8 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     testTimeout: 20_000,
+    // Lightsail RAM 1.9GB — 워커를 늘리면 스왑으로 밀려난다
+    maxWorkers: 1,
+    minWorkers: 1,
   },
 });

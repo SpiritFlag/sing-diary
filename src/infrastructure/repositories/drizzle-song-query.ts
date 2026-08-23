@@ -1,7 +1,12 @@
 // Design Ref: §3.4, §9.4, §1.3 ★ⓐ — SongQuery의 Drizzle 구현. 읽기 전용, Neon HTTP 드라이버(db) 사용.
-import { and, eq, sql } from "drizzle-orm";
+import { and, count, eq, isNull, or, sql } from "drizzle-orm";
 import type { Brand } from "@/domain";
-import type { NumberView, SongListItem, SongQuery } from "@/application/ports/song-query";
+import type {
+  FillQueueSnapshot,
+  NumberView,
+  SongListItem,
+  SongQuery,
+} from "@/application/ports/song-query";
 import { songNumbers, songs } from "../db/schema";
 import type { DbOrTx } from "./types";
 
@@ -33,6 +38,23 @@ function toListItem(row: SongWithNumbers): SongListItem {
     numbers,
     updatedAt: row.updatedAt,
   };
+}
+
+// Design Ref: expand-fill-queue §2.3 D-C — 큐 정렬은 불변 컬럼(created_at)으로 한다.
+// updated_at은 setNumber/updateMeta가 touch하므로 정렬 키로 쓰면 한 건 저장할 때마다 카드가 튄다.
+const FILL_SORT_ORDER = [sql`${songs.createdAt} ASC`, sql`${songs.id} ASC`];
+
+// Design Ref: expand-fill-queue §3.3 — ARCHITECT §5.6의 "LEFT JOIN … WHERE n.song_id IS NULL"을
+// NOT EXISTS로 표현한 것. 의미는 동일하고, 카드 표시용 numbers는 relation 로드가 따로 가져온다.
+// 판정 기준은 "행 없음"이다 — UNSUPPORTED 행이 있으면 결손이 아니다(3-state 계약, §8.2 #32).
+// 서브쿼리의 테이블·컬럼은 리터럴로 적고 별칭(fq)을 준다 — 관계형 쿼리 빌더의 where 안에서는
+// 컬럼 참조(${songNumbers.songId})가 바깥 별칭("songs")으로 렌더링되어 상관 서브쿼리가 깨진다(실측).
+// 바깥 참조인 ${songs.id}만 빌더에 맡긴다.
+function missingNumberRow(brand: Brand) {
+  return sql`NOT EXISTS (
+    SELECT 1 FROM "song_numbers" fq
+    WHERE fq."song_id" = ${songs.id} AND fq."brand" = ${brand}::brand_enum
+  )`;
 }
 
 const SORT_ORDER = [
@@ -69,6 +91,41 @@ export function createDrizzleSongQuery(db: DbOrTx): SongQuery {
         with: { numbers: true },
       });
       return row ? toListItem(row) : null;
+    },
+
+    // Design Ref: expand-fill-queue §3.2 D-A — 세 쿼리를 Promise.all로 병렬 발사한다.
+    // 읽기 1발이 ~700ms대이므로 직렬이면 그대로 3배가 된다.
+    async fillQueue(ownerId): Promise<FillQueueSnapshot> {
+      const byBrand = (brand: Brand) =>
+        db.query.songs.findMany({
+          where: and(eq(songs.ownerId, ownerId), missingNumberRow(brand)),
+          with: { numbers: true },
+          orderBy: FILL_SORT_ORDER,
+        });
+
+      const [tj, ky, meta, counted] = await Promise.all([
+        byBrand("TJ"),
+        byBrand("KY"),
+        // 큐 B — §5.6 원문 그대로 title/artist만 본다. memo는 큐 대상이 아니다.
+        db.query.songs.findMany({
+          where: and(
+            eq(songs.ownerId, ownerId),
+            or(isNull(songs.title), isNull(songs.artist)),
+          ),
+          with: { numbers: true },
+          orderBy: FILL_SORT_ORDER,
+        }),
+        // Check Gap-1 — 결손 0과 곡 0을 가르는 값. 네 번째 발이지만 같은 Promise.all이라
+        // 벽시계는 여전히 가장 느린 하나다. 행을 세기만 하므로 relation 로드도 없다.
+        db.select({ n: count() }).from(songs).where(eq(songs.ownerId, ownerId)),
+      ]);
+
+      return {
+        tj: tj.map(toListItem),
+        ky: ky.map(toListItem),
+        meta: meta.map(toListItem),
+        totalSongs: counted[0]?.n ?? 0,
+      };
     },
   };
 }

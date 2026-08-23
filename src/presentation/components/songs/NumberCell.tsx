@@ -4,6 +4,8 @@
 // Design Ref: expand-playlist-import §3.5, §10.1 C-6 — 확정 판정(dirty-check 포함)은 이 컴포넌트가
 // 아니라 song-state.ts의 commitDecision()이 한다. G-1 수정의 근거는 그 함수 주석에 있다.
 // 여기 남은 것은 편집 상태(editing/draft/touched)와 그 판정 결과를 콜백으로 흘리는 일뿐이다.
+// Design Ref: expand-fill-queue §2.3 D-I — 저장 중 표시. 잠금 로직(commitCell·pendingRef)은
+// 손대지 않는다(C-7) — 백로그 80c2fe1d가 지적한 것은 잠금의 부재가 아니라 표시의 부실이었다.
 import { useState } from "react";
 import type { NumberView } from "@/application/ports/song-query";
 import { commitDecision } from "./song-state";
@@ -36,7 +38,7 @@ export function NumberCell({
           setTouched(false);
           setEditing(true);
         }}
-        className="w-20 rounded-md bg-surface-raised px-2 py-1 text-left text-sm disabled:opacity-50"
+        className="w-20 rounded-md bg-surface-raised px-2 py-1 text-left text-sm disabled:opacity-50 disabled:animate-pulse disabled:cursor-wait"
       >
         {value?.status === "UNSUPPORTED" ? (
           <span className="rounded-full bg-danger/20 px-1.5 py-0.5 text-[10px] text-danger">

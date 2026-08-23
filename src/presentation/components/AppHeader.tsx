@@ -32,6 +32,10 @@ export function AppHeader({ session }: { session: Session | null }) {
         <Link href="/songs" className="hover:text-text">
           곡 관리
         </Link>
+        {/* Design Ref: expand-fill-queue §5.5, FR-15 — 빈칸채우기 큐 진입점(PC 사후 정리 동선) */}
+        <Link href="/songs/fill" className="hover:text-text">
+          빈칸채우기
+        </Link>
         {/* Design Ref: §7 — Clerk 7.x는 afterSignOutUrl prop을 제거했다. 로그아웃 이동 경로는 ClerkProvider 전역 설정을 따른다 */}
         <UserButton />
       </nav>

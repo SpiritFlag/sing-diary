@@ -8,7 +8,16 @@ export const SEED_USERS = {
 } as const;
 
 export interface SeedResult {
-  songs: { normal: string; stub: string; othersOwned: string };
+  songs: {
+    normal: string;
+    stub: string;
+    othersOwned: string;
+    /** expand-fill-queue §8.5 — TJ만 결손(KY는 AVAILABLE). created_at 오름차순으로 tjOnly1 → tjOnly2 */
+    tjOnly1: string;
+    tjOnly2: string;
+    /** expand-fill-queue §8.5 — title만 NULL(artist는 있음). 큐 B의 OR 조건 검증용 */
+    titleOnlyNull: string;
+  };
   sessions: { open: string; closed: string; othersOwned: string };
   /** open 세션의 엔트리 3건. INV-4가 "이 세션의 전부"로 쓰므로 여기에 다른 세션 것을 섞지 않는다 */
   entries: string[];
@@ -23,17 +32,41 @@ export async function resetAndSeed(db: Database): Promise<SeedResult> {
   await db.delete(sessions);
   await db.delete(songs);
 
+  // Check Gap-4 — created_at을 명시한다. defaultNow()는 트랜잭션 시각이라, 누가 이 시드를
+  // db.transaction()으로 감싸거나 multi-row insert로 합치는 순간 전부 같은 값이 된다.
+  // 그러면 큐 정렬의 타이브레이커(id ASC)가 랜덤 UUID라 정렬 테스트가 간헐적으로 붉어진다.
+  // §8.5의 "created_at 상이"를 우연이 아니라 강제로 만든다.
+  const at = (minutes: number) => new Date(Date.UTC(2026, 7, 1, 0, minutes, 0));
+
   const [normalSong] = await db
     .insert(songs)
-    .values({ ownerId: SEED_USERS.a, title: "기존 곡", artist: "가수 A" })
+    .values({ ownerId: SEED_USERS.a, title: "기존 곡", artist: "가수 A", createdAt: at(0) })
     .returning({ id: songs.id });
   const [stubSong] = await db
     .insert(songs)
-    .values({ ownerId: SEED_USERS.a, title: null, artist: null })
+    .values({ ownerId: SEED_USERS.a, title: null, artist: null, createdAt: at(1) })
     .returning({ id: songs.id });
   const [othersSong] = await db
     .insert(songs)
-    .values({ ownerId: SEED_USERS.b, title: "타인 곡", artist: "가수 B" })
+    .values({ ownerId: SEED_USERS.b, title: "타인 곡", artist: "가수 B", createdAt: at(2) })
+    .returning({ id: songs.id });
+
+  // expand-fill-queue §8.5 — 빈칸채우기 큐 fixture.
+  // 기존 세 곡(normal=결손 없음 대조군, stub=양 브랜드+메타 결손, othersOwned=타 owner 결손)은
+  // 그대로 두고 세 건만 덧댄다. 제목에 "기존"·"타인"을 쓰지 않는다 — 기존 검색 테스트의 매칭 집합을 흔들지 않기 위함.
+  // created_at은 stub(1분) < tjOnly1(3분) < tjOnly2(4분) — 큐 정렬 단언(§8.2 #38)이 기대는 순서다.
+  const [tjOnly1] = await db
+    .insert(songs)
+    .values({ ownerId: SEED_USERS.a, title: "큐 곡 하나", artist: "가수 C", createdAt: at(3) })
+    .returning({ id: songs.id });
+  const [tjOnly2] = await db
+    .insert(songs)
+    .values({ ownerId: SEED_USERS.a, title: "큐 곡 둘", artist: "가수 D", createdAt: at(4) })
+    .returning({ id: songs.id });
+  // title만 NULL — artist가 있으므로 list의 NULLS FIRST 정렬에서 stub보다 뒤에 선다(기존 단언 보존).
+  const [titleOnlyNull] = await db
+    .insert(songs)
+    .values({ ownerId: SEED_USERS.a, title: null, artist: "가수 E", createdAt: at(5) })
     .returning({ id: songs.id });
 
   await db.insert(songNumbers).values([
@@ -49,6 +82,12 @@ export async function resetAndSeed(db: Database): Promise<SeedResult> {
       number: "22222",
       status: "AVAILABLE",
     },
+    // 큐 A(TJ) 대상 두 건 — KY는 있고 TJ 행이 없다. TJ 큐에는 뜨고 KY 큐에는 안 뜬다(§8.2 #31).
+    { songId: tjOnly1.id, brand: "KY", number: "48727", status: "AVAILABLE" },
+    { songId: tjOnly2.id, brand: "KY", number: "48728", status: "AVAILABLE" },
+    // titleOnlyNull은 번호 결손이 아니다 — 큐 B에만 떠야 한다(양 브랜드 채움).
+    { songId: titleOnlyNull.id, brand: "TJ", number: "55551", status: "AVAILABLE" },
+    { songId: titleOnlyNull.id, brand: "KY", number: "55552", status: "AVAILABLE" },
   ]);
 
   const [openSession] = await db
@@ -104,7 +143,14 @@ export async function resetAndSeed(db: Database): Promise<SeedResult> {
     .returning({ id: entries.id });
 
   return {
-    songs: { normal: normalSong.id, stub: stubSong.id, othersOwned: othersSong.id },
+    songs: {
+      normal: normalSong.id,
+      stub: stubSong.id,
+      othersOwned: othersSong.id,
+      tjOnly1: tjOnly1.id,
+      tjOnly2: tjOnly2.id,
+      titleOnlyNull: titleOnlyNull.id,
+    },
     sessions: {
       open: openSession.id,
       closed: closedSession.id,

@@ -3,6 +3,7 @@ import { createAddEntryByNumber } from "@/application/use-cases/add-entry-by-num
 import { createAddEntryBySong } from "@/application/use-cases/add-entry-by-song";
 import { createDeleteEntry } from "@/application/use-cases/delete-entry";
 import { createGetCurrentSession } from "@/application/use-cases/get-current-session";
+import { createGetFillQueue } from "@/application/use-cases/get-fill-queue";
 import { createGetSessionDetail } from "@/application/use-cases/get-session-detail";
 import { createListSessions } from "@/application/use-cases/list-sessions";
 import { createListSongs } from "@/application/use-cases/list-songs";
@@ -44,6 +45,7 @@ export const useCases = {
   deleteEntry: createDeleteEntry(txRunner),
   searchSongs: createSearchSongs(songQuery),
   listSongs: createListSongs(songQuery),
+  getFillQueue: createGetFillQueue(songQuery),
   updateSongMeta: createUpdateSongMeta(txRunner, songQuery),
   setSongNumber: createSetSongNumber(txRunner, songQuery),
   clearSongNumber: createClearSongNumber(txRunner, songQuery),

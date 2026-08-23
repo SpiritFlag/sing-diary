@@ -92,11 +92,12 @@ async function main() {
   log(`테스트 유저 ${user.id} 세션 발급 완료`);
 
   try {
-    // 1. GET /api/sessions/current — 미인증 — 401
+    // 1. GET /api/sessions/current — 미인증 — 401 UNAUTHORIZED
     {
       const res = await req("/api/sessions/current");
       const body = await res.json().catch(() => null);
-      record(1, "GET current (미인증)", 401, res, body, res.status === 401);
+      const pass = res.status === 401 && body?.error?.code === "UNAUTHORIZED";
+      record(1, "GET current (미인증)", 401, res, body, pass);
     }
 
     // 2. POST /api/sessions — brand='XX' — 400 + fieldErrors
@@ -195,18 +196,7 @@ async function main() {
       const res = await req("/", { redirect: "manual" });
       const location = res.headers.get("location") ?? "";
       const pass = [302, 303, 307, 308].includes(res.status) && location.includes("/sign-in");
-      results.push({
-        id: 9,
-        description: "GET / (미인증 페이지)",
-        expected: "3xx → /sign-in",
-        status: res.status,
-        body: { location },
-        pass,
-        elapsedMs: res.elapsedMs,
-      });
-      log(
-        `${pass ? "✅" : "❌"} #9 GET / (미인증 페이지) — expected 3xx → /sign-in, got ${res.status} → ${location} (${res.elapsedMs}ms)`,
-      );
+      record(9, "GET / (미인증 페이지)", "3xx → /sign-in", res, { location }, pass);
     }
   } finally {
     log("정리 중 — 테스트 유저 소유 데이터만 정확히 scope해서 삭제...");

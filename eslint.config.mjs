@@ -81,12 +81,36 @@ const presentationBoundaries = {
   ignores: ["src/presentation/container.ts"],
 };
 
+// Design Ref: expand-song-catalog §7.2 — API 라우트 핸들러는 withAuth()로 감싸야 한다.
+// 형태만 강제한다(§7.2 한계 참조) — 실수로 가드를 빠뜨리는 것을 막는 것이 목적이다.
+const apiRouteGuard = {
+  files: ["src/app/api/**/route.ts"],
+  rules: {
+    "no-restricted-syntax": [
+      "error",
+      {
+        selector:
+          "ExportNamedDeclaration > FunctionDeclaration[id.name=/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/]",
+        message:
+          "라우트 핸들러는 `export const GET = withAuth(...)` 형태여야 한다 (expand-song-catalog §7.2).",
+      },
+      {
+        selector:
+          "ExportNamedDeclaration > VariableDeclaration > VariableDeclarator[id.name=/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/]:not([init.callee.name='withAuth'])",
+        message:
+          "라우트 핸들러는 withAuth()로 감싸야 한다 — 인증 가드 누락 방지 (expand-song-catalog §7.2).",
+      },
+    ],
+  },
+};
+
 const eslintConfig = defineConfig([
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   layerBoundaries,
   applicationBoundaries,
   infrastructureBoundaries,
   presentationBoundaries,
+  apiRouteGuard,
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "drizzle/**"]),
 ]);
 

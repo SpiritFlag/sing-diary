@@ -1,20 +1,14 @@
 // Design Ref: §4.2 PUT /api/sessions/:id/entries/order
-import { NextRequest, NextResponse } from "next/server";
-import { mapError } from "@/presentation/api/error-mapper";
+import { NextResponse } from "next/server";
+import { withAuth } from "@/presentation/auth/with-auth";
 import { reorderEntriesSchema } from "@/presentation/api/schemas";
-import { requireOwnerId, useCases } from "@/presentation/container";
+import { useCases } from "@/presentation/container";
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const ownerId = await requireOwnerId();
+export const PUT = withAuth<{ params: Promise<{ id: string }> }>(
+  async ({ ownerId }, req, { params }) => {
     const { id: sessionId } = await params;
     const { entryIds } = reorderEntriesSchema.parse(await req.json());
     const entries = await useCases.reorderEntries({ ownerId, sessionId, entryIds });
     return NextResponse.json({ data: { entries } });
-  } catch (error) {
-    return mapError(error);
-  }
-}
+  },
+);

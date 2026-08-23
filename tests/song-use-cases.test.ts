@@ -4,6 +4,7 @@
 import { DomainError } from "@/domain";
 import { beforeAll, describe, expect, it } from "vitest";
 import { resetAndSeed, SEED_USERS } from "../src/infrastructure/db/seed";
+import { songNumbers } from "../src/infrastructure/db/schema";
 import { activateTestDatabase } from "./support/db";
 
 const hasDb = Boolean(process.env.TEST_DATABASE_URL);
@@ -83,5 +84,32 @@ describe.skipIf(!hasDb)("곡 카탈로그 유스케이스 (Design §8.4)", () =>
         number: "99999",
       }),
     ).rejects.toMatchObject({ code: "SONG_NOT_FOUND" });
+  });
+
+  it("addEntryByNumber (Check 단계 G-2 회귀): 타 owner가 같은 (brand,number)를 갖고 있어도 내 곡을 정확히 찾는다", async () => {
+    // othersOwned(owner_b)에게 normalSong(owner_a)과 똑같은 TJ:11111을 부여해 충돌을 재현한다.
+    // 수정 전에는 findByOwnerBrandNumber가 owner 필터 없이 findFirst했기 때문에, 이 행이
+    // normalSong보다 먼저 걸리면 owner_a의 실재하는 곡을 "없음"으로 오판해 중복 stub을 만들었다.
+    await db.insert(songNumbers).values({
+      songId: seed.songs.othersOwned,
+      brand: "TJ",
+      number: "11111",
+      status: "AVAILABLE",
+    });
+
+    const before = await useCases.getCurrentSession(SEED_USERS.a);
+    const beforeCount = before!.entries.length;
+
+    const result = await useCases.addEntryByNumber({
+      ownerId: SEED_USERS.a,
+      sessionId: seed.sessions.open,
+      number: "11111",
+    });
+
+    expect(result.isNewStub).toBe(false); // 새 stub이 아니라 기존 내 곡을 찾아야 한다
+    expect(result.entry.songId).toBe(seed.songs.normal); // othersOwned가 아니라 정확히 내 곡
+
+    const after = await useCases.getCurrentSession(SEED_USERS.a);
+    expect(after!.entries.length).toBe(beforeCount + 1); // stub이 하나 더 생기지 않았다
   });
 });

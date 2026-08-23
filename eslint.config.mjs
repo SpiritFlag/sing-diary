@@ -83,8 +83,10 @@ const presentationBoundaries = {
 
 // Design Ref: expand-song-catalog §7.2 — API 라우트 핸들러는 withAuth()로 감싸야 한다.
 // 형태만 강제한다(§7.2 한계 참조) — 실수로 가드를 빠뜨리는 것을 막는 것이 목적이다.
+// Check 단계 G-4 수정: glob이 api/ 아래로만 좁혀져 있었다. Next.js는 App Router 어디든
+// route.ts를 허용하므로(webhook 등) api/ 밖에 생기는 라우트는 이 규칙을 통째로 비껴갔다.
 const apiRouteGuard = {
-  files: ["src/app/api/**/route.ts"],
+  files: ["src/app/**/route.ts"],
   rules: {
     "no-restricted-syntax": [
       "error",

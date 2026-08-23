@@ -32,13 +32,25 @@ export function createDrizzleSongRepo(db: DbOrTx): SongRepo {
   }
 
   return {
+    // Check 단계 G-2 수정: owner를 WHERE에 직접 건다 — 예전엔 brand+number로만 findFirst한
+    // 뒤(정렬 없음) 사후에 owner를 대조했다. 같은 (brand, number)를 가진 타 owner의 곡이
+    // 먼저 걸리면 실제로 존재하는 내 곡을 "없음"으로 오판해 addEntryByNumber가 중복 stub을
+    // 만들 수 있었다(브랜드 번호는 실제 곡 코드라 사용자 간 충돌이 드물지 않다). owner를
+    // 쿼리 자체의 필터로 걸면 이 곡이 어디 있든 정확히 그 행만 잡히므로 충돌 여지가 없다.
     async findByOwnerBrandNumber(ownerId, brand, number) {
-      const row = await db.query.songNumbers.findFirst({
-        where: and(eq(songNumbers.brand, brand), eq(songNumbers.number, number)),
-        with: { song: true },
-      });
-      if (!row || row.song.ownerId !== ownerId) return null;
-      return toDomain(row.song);
+      const [row] = await db
+        .select({ song: songs })
+        .from(songNumbers)
+        .innerJoin(songs, eq(songNumbers.songId, songs.id))
+        .where(
+          and(
+            eq(songNumbers.brand, brand),
+            eq(songNumbers.number, number),
+            eq(songs.ownerId, ownerId),
+          ),
+        )
+        .limit(1);
+      return row ? toDomain(row.song) : null;
     },
 
     async createStubWithNumber(ownerId, brand, number) {

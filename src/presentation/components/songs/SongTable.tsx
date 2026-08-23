@@ -58,17 +58,17 @@ function writeCell(
   });
 }
 
-/** 같은 행의 다른 셀이 저장 중이면(pending) 그 필드는 로컬 값을 유지하고 나머지만 서버 확정값으로 갈아끼운다 */
-function replaceRow(rows: SongListItem[], fresh: SongListItem, keepFields: Set<TextField | Brand>): SongListItem[] {
-  return rows.map((r) => {
-    if (r.id !== fresh.id) return r;
-    const merged: SongListItem = { ...fresh, numbers: { ...fresh.numbers } };
-    for (const field of keepFields) {
-      if (isBrandField(field)) merged.numbers[field] = r.numbers[field];
-      else merged[field] = r[field];
-    }
-    return merged;
-  });
+/**
+ * 확정된 그 필드 하나만 서버 값으로 반영한다 — 행 전체를 갈아끼우지 않는다.
+ * (Check 단계 G-3 수정) commitCell 한 번은 정확히 필드 하나만 PATCH/PUT/DELETE하므로,
+ * 응답에 실린 나머지 필드는 그 요청이 실제로 쓴 값이 아니라 요청 처리 시점의 스냅샷일 뿐이다.
+ * 원래는 "이 행의 pending 아닌 필드는 응답으로 갈아끼운다"였는데, 같은 행 두 필드를 거의
+ * 동시에 고치면 서버 처리 순서가 클라이언트 전송 순서와 어긋날 수 있어(둘 다 독립된 요청이라
+ * 어느 쪽이 먼저 커밋될지 보장이 없다) 늦게 도착한 응답이 그새 확정된 다른 필드를 그 요청
+ * 시점의 옛 값으로 되돌릴 수 있었다. 필드 하나만 반영하면 이 클래스의 레이스 자체가 없어진다.
+ */
+function extractField(data: SongListItem, field: TextField | Brand): string | null | NumberView {
+  return isBrandField(field) ? data.numbers[field] : data[field];
 }
 
 function matchesFilter(song: SongListItem, keyword: string): boolean {
@@ -102,14 +102,8 @@ export function SongTable({ initial }: { initial: SongListItem[] }) {
       const res = await send();
       if (!res.ok) throw new Error(await parseErrorMessage(res, "저장에 실패했어요"));
       const { data } = (await res.json()) as { data: SongListItem };
-      const [songId] = parseKey(key);
-      const stillPending = new Set<TextField | Brand>();
-      for (const k of pendingRef.current.keys()) {
-        if (k === key) continue;
-        const [id, field] = parseKey(k);
-        if (id === songId) stillPending.add(field);
-      }
-      setRows((rs) => replaceRow(rs, data, stillPending));
+      const [, field] = parseKey(key);
+      setRows((rs) => writeCell(rs, key, extractField(data, field))); // 그 셀만 서버 확정값으로
     } catch (e) {
       setRows((rs) => writeCell(rs, key, prev ?? null)); // 그 셀만 원복
       toast.show(e instanceof Error ? e.message : "저장에 실패했어요");

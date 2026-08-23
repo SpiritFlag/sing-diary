@@ -3,6 +3,8 @@
 // Design Ref: §5.3, §9.1 — 제목·아티스트·메모 인라인 편집. 값이 안 바뀌었으면 커밋하지 않는다.
 // "" → null 정규화는 서버 Zod 스키마가 재검증하는 진짜 지점이다(D-F) — 여기서 하는 trim은
 // 화면 표시·변경 여부 판정을 위한 것일 뿐, 서버는 클라이언트가 뭘 보내든 스스로 다시 정규화한다.
+// Design Ref: expand-fill-queue §2.3 D-I — 저장 중 표시. 잠금 로직(commitCell·pendingRef)은
+// 손대지 않는다(C-7) — 백로그 80c2fe1d가 지적한 것은 잠금의 부재가 아니라 표시의 부실이었다.
 import { useState } from "react";
 
 export function InlineCell({
@@ -29,7 +31,7 @@ export function InlineCell({
           setDraft(initial);
           setEditing(true);
         }}
-        className="w-full truncate rounded-md px-2 py-1 text-left text-sm text-text hover:bg-surface-raised disabled:opacity-50"
+        className="w-full truncate rounded-md px-2 py-1 text-left text-sm text-text hover:bg-surface-raised disabled:opacity-50 disabled:animate-pulse disabled:cursor-wait"
       >
         {value ?? <span className="text-text-dim">{placeholder}</span>}
       </button>

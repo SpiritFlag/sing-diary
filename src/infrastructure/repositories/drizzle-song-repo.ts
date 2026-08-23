@@ -97,6 +97,14 @@ export function createDrizzleSongRepo(db: DbOrTx): SongRepo {
       return true;
     },
 
+    // Design Ref: expand-playlist-import §3.3 D-P — 부수효과 없는 소유권 확인. touch()를 쓰지 않는다.
+    async findByIdForOwner(ownerId: string, songId: string): Promise<Song | null> {
+      const row = await db.query.songs.findFirst({
+        where: and(eq(songs.id, songId), eq(songs.ownerId, ownerId)),
+      });
+      return row ? toDomain(row) : null;
+    },
+
     async clearNumber(ownerId: string, songId: string, brand): Promise<boolean> {
       if (!(await touch(ownerId, songId))) return false;
       await db

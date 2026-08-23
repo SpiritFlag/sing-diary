@@ -7,7 +7,9 @@ export function AppHeader({ session }: { session: Session | null }) {
   return (
     <header className="flex items-center justify-between border-b border-surface-raised px-4 py-3">
       <div className="flex items-center gap-2 text-sm">
-        <span className="font-semibold text-text">sing-diary</span>
+        <Link href="/" className="font-semibold text-text hover:text-primary">
+          sing-diary
+        </Link>
         {session && (
           <>
             <span className="rounded-full bg-surface-raised px-2 py-0.5 text-xs text-primary">

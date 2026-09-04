@@ -56,4 +56,4 @@ npm run dev
 
 ## 브랜치·문서 규약
 
-[CONTRIBUTING.md](CONTRIBUTING.md), [docs/RULE.md](docs/RULE.md) 참고.
+PDCA 체계는 pdca-skill v1을 따른다(사이클마다 `plan → design → do → analysis → report → release`, 사이클 브랜치 `{버전}-{사이클명}`). 이 프로젝트만의 검증 수단·브랜치 규칙·종료 훅은 [docs/RULE.md](docs/RULE.md), 브랜치 운영은 [CONTRIBUTING.md](CONTRIBUTING.md) 참고. 사이클 이력은 [docs/PDCA/_INDEX.md](docs/PDCA/_INDEX.md).
